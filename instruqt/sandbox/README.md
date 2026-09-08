@@ -172,7 +172,8 @@ inherited from the base image.
    `python3` for the proxy, and `openjdk-17-jdk-headless`.
 2. `git clone --depth 1` of the exercise repo to `/root/workshop`.
 3. The Temporal CLI, symlinked to `/usr/local/bin/temporal`.
-4. `./gradlew classes testClasses` to warm the Gradle cache.
+4. Every resolvable configuration resolved, then `./gradlew classes testClasses`,
+   to warm the Gradle cache.
 5. mitmproxy and Flask in `/opt/proxy-venv`, and the mitmproxy CA cert trusted
    system-wide **and** imported into the JVM truststore.
 6. Gradle proxy settings in `/root/.gradle/gradle.properties`.
@@ -183,8 +184,17 @@ inherited from the base image.
 
 Step 4 is the expensive one: it pulls `gradle-8.8-all.zip`, the whole Temporal
 SDK dependency tree, and then compiles fifteen packages plus the test sources.
-Reckon on several minutes. It is also why Hot Start is not optional for this
-track.
+Observed at roughly 30 seconds on a real provision, though it is entirely at the
+mercy of Maven Central. It is a large part of why Hot Start matters here.
+
+`classes testClasses` alone is **not** a complete warm, which is why step 4
+resolves every configuration first through a `-I` init script. Compiling only
+resolves `compileClasspath` and `testCompileClasspath`, so every runtime-only
+dependency of the SDK stays unfetched — `jackson-datatype-jsr310`,
+`grpc-context`, `perfmark-api`, `LatencyUtils`, `animal-sniffer-annotations`.
+None of them appear on `compileClasspath` at all. The attendee's first
+`./gradlew execute` then has to resolve `runtimeClasspath` over the network,
+which is the exact thing the warm exists to prevent.
 
 ### Adding a dependency
 
@@ -221,6 +231,14 @@ the proxy so the kill switch cannot break the lab itself.
 makes the mitmproxy CA trusted for everything except Java. Without the
 `keytool -importcert` into `$JAVA_HOME/lib/security/cacerts`, every HTTPS fetch
 Gradle makes through the proxy fails certificate validation.
+
+**The Gradle daemon outlives the truststore change.** A JVM reads the default
+truststore once, on its first TLS handshake. The daemon step 4 starts does that
+against Maven Central seconds before the mitmproxy CA exists, so it would carry
+a truststore with no CA into the attendee's session and fail every proxied fetch
+with `PKIX path building failed`. Step 5 therefore ends with `./gradlew --stop`,
+and the attendee's first command starts a fresh daemon that reads the store as
+it now stands.
 
 **Cache warming has to happen before the proxy exists.** Step 4 runs while the
 provisioning shell still has direct outbound access, which is why it is ahead

@@ -94,11 +94,42 @@ ln -sf /root/.temporalio/bin/temporal /usr/local/bin/temporal
 #    it reaches Gradle's distribution service and Maven Central directly.
 #
 #    Without this the first attendee command downloads gradle-8.8-all.zip plus
-#    every SDK dependency and looks like a hang. `classes testClasses` compiles
-#    all 15 packages and the test sources without running the tests, which
-#    fetches everything `execute` and `test` will later need.
-log "Warming the Gradle cache (distribution + dependencies + compile)"
+#    every SDK dependency and looks like a hang.
+#
+#    `classes testClasses` is NOT enough on its own. It resolves the two compile
+#    classpaths and nothing else, so every runtime-only dependency of the SDK
+#    stays unfetched: jackson-datatype-jsr310, grpc-context, perfmark-api,
+#    LatencyUtils, animal-sniffer-annotations. The attendee's first
+#    `execute` then has to resolve runtimeClasspath over the network, which is
+#    exactly what the warm exists to prevent.
+#
+#    So resolve every resolvable configuration first. The init script keeps this
+#    out of the repo's build.gradle, where it would be noise the exercises never
+#    use. Configurations that refuse to resolve are skipped rather than fatal:
+#    Gradle marks some internal ones unresolvable and that is not an error.
+log "Warming the Gradle cache (distribution + every configuration + compile)"
 cd "${WORKSHOP_DIR}"
+
+cat > /tmp/resolve-all.gradle << 'GRADLE'
+allprojects {
+    tasks.register("resolveAllDependencies") {
+        doLast {
+            configurations.matching { it.canBeResolved }.each { c ->
+                try {
+                    c.resolve()
+                    logger.lifecycle("resolved ${c.name}")
+                } catch (Exception e) {
+                    logger.lifecycle("skipped ${c.name}: ${e.message}")
+                }
+            }
+        }
+    }
+}
+GRADLE
+
+./gradlew --console=plain -I /tmp/resolve-all.gradle resolveAllDependencies
+rm -f /tmp/resolve-all.gradle
+
 ./gradlew --console=plain classes testClasses
 
 # 5. mitmproxy and Flask, in their own venv so nothing about the workshop
@@ -136,6 +167,16 @@ keytool -importcert -noprompt -trustcacerts \
     -cacerts \
     -storepass changeit >/dev/null
 log "mitmproxy CA imported into the JDK truststore"
+
+# Stop the daemon the warm in step 4 started. A JVM reads the default
+# truststore once, on its first TLS handshake, and that daemon's first
+# handshake was against Maven Central seconds before the CA above existed. It
+# would happily survive into the attendee's session still not trusting
+# mitmproxy, and every HTTPS fetch through the proxy would fail with
+#   PKIX path building failed ... unable to find valid certification path
+# The next `./gradlew` starts a fresh daemon that reads the store as it is now.
+log "Stopping the Gradle daemon so the next one picks up the new truststore"
+./gradlew --console=plain -q --stop || true
 
 # 6. Gradle proxy settings. The JVM ignores HTTP_PROXY and friends, so routing
 #    Gradle through mitmproxy takes system properties instead. nonProxyHosts
