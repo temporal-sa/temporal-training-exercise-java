@@ -1,5 +1,6 @@
 ---
 slug: queries
+id: wlsyytwbjpiv
 type: challenge
 title: 'Exercise 3: Money Transfer with Queries'
 teaser: Ask a running Workflow what it is doing right now, without touching a database.
@@ -22,34 +23,41 @@ notes:
     That is why a Query handler must not mutate anything and must not
     call an Activity. Break that rule and replay stops matching.
 tabs:
-- title: Code Editor
+- id: yz8ux5zplcej
+  title: Code Editor
   type: code
   hostname: workshop
   path: /root/workshop/src/main/java/com/temporal/training/exercise3
-- title: Worker
+- id: cacqosvmytef
+  title: Worker
   type: terminal
   hostname: workshop
   workdir: /root/workshop
-- title: Terminal
+- id: kpexbztpaf9y
+  title: Terminal
   type: terminal
   hostname: workshop
   workdir: /root/workshop
-- title: Temporal UI
+- id: grcxwusauya6
+  title: Temporal UI
   type: service
   hostname: workshop
   path: /
   port: 8233
-- title: Solution
+- id: m0klzxvjpgmf
+  title: Solution
   type: code
   hostname: workshop
   path: /root/workshop/src/main/java/com/temporal/training/solution3
-- title: Network Control Panel
+- id: xxbtkl3scxrh
+  title: Network Control Panel
   type: service
   hostname: workshop
   path: /
   port: 5000
 difficulty: basic
 timelimit: 1800
+enhanced_loading: null
 ---
 
 # Money Transfer with Queries

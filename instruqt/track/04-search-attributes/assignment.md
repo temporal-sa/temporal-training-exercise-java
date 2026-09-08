@@ -1,5 +1,6 @@
 ---
 slug: search-attributes
+id: nd3vppca8zk8
 type: challenge
 title: 'Exercise 4: Money Transfer with Search Attributes'
 teaser: Tag a Workflow with a business identifier, then find it by that identifier
@@ -24,34 +25,41 @@ notes:
     Try it without that registration in production and the Workflow Task
     fails outright.
 tabs:
-- title: Code Editor
+- id: zakiz90exwro
+  title: Code Editor
   type: code
   hostname: workshop
   path: /root/workshop/src/main/java/com/temporal/training/exercise4
-- title: Worker
+- id: j1koaps0orwg
+  title: Worker
   type: terminal
   hostname: workshop
   workdir: /root/workshop
-- title: Terminal
+- id: 830grt6wmfnk
+  title: Terminal
   type: terminal
   hostname: workshop
   workdir: /root/workshop
-- title: Temporal UI
+- id: hb7tbqyx9yfg
+  title: Temporal UI
   type: service
   hostname: workshop
   path: /
   port: 8233
-- title: Solution
+- id: v0spfbhvhqxn
+  title: Solution
   type: code
   hostname: workshop
   path: /root/workshop/src/main/java/com/temporal/training/solution4
-- title: Network Control Panel
+- id: nwfk0loupm6x
+  title: Network Control Panel
   type: service
   hostname: workshop
   path: /
   port: 5000
 difficulty: basic
 timelimit: 1800
+enhanced_loading: null
 ---
 
 # Money Transfer with Search Attributes

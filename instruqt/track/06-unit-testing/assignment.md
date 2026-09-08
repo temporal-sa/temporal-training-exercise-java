@@ -1,5 +1,6 @@
 ---
 slug: unit-testing
+id: gtp1xx6ylujq
 type: challenge
 title: 'Exercise 6: Unit Testing Workflows'
 teaser: Test a Workflow that waits for a human, with time skipping and mocked Activities.
@@ -22,34 +23,41 @@ notes:
     in CI with nothing installed, and the whole suite finishes in a few
     seconds.
 tabs:
-- title: Code Editor
+- id: 3njk0ae3pf2h
+  title: Code Editor
   type: code
   hostname: workshop
   path: /root/workshop/src/test/java/com/temporal/training/exercise6
-- title: Worker
+- id: xzoiao2d9x2f
+  title: Worker
   type: terminal
   hostname: workshop
   workdir: /root/workshop
-- title: Terminal
+- id: hwvzgpz6sctr
+  title: Terminal
   type: terminal
   hostname: workshop
   workdir: /root/workshop
-- title: Temporal UI
+- id: jj06ozogoiuu
+  title: Temporal UI
   type: service
   hostname: workshop
   path: /
   port: 8233
-- title: Solution
+- id: ulbs5dzffpn3
+  title: Solution
   type: code
   hostname: workshop
   path: /root/workshop/src/test/java/com/temporal/training/solution6
-- title: Network Control Panel
+- id: 0ju88eiuaq3a
+  title: Network Control Panel
   type: service
   hostname: workshop
   path: /
   port: 5000
 difficulty: intermediate
 timelimit: 1800
+enhanced_loading: null
 ---
 
 # Unit Testing Workflows

@@ -1,5 +1,6 @@
 ---
 slug: manual-retry
+id: v7dzev0und2y
 type: challenge
 title: 'Exercise 7: Manual Activity Retry'
 teaser: An Activity fails on bad data. Automatic retry cannot help. Fix the data with
@@ -25,38 +26,46 @@ notes:
     and pick the Activity back up. The withdrawal that already succeeded
     stays succeeded.
 tabs:
-- title: Code Editor
+- id: becozzewrch5
+  title: Code Editor
   type: code
   hostname: workshop
   path: /root/workshop/src/main/java/com/temporal/training/exercise7
-- title: Worker
+- id: zcou2emlva0v
+  title: Worker
   type: terminal
   hostname: workshop
   workdir: /root/workshop
-- title: Terminal
+- id: dorxhbissimx
+  title: Terminal
   type: terminal
   hostname: workshop
   workdir: /root/workshop
-- title: Temporal UI
+- id: sfjy7peuypvm
+  title: Temporal UI
   type: service
   hostname: workshop
   path: /
   port: 8233
-- title: Solution
+- id: xpxmcxezecgy
+  title: Solution
   type: code
   hostname: workshop
   path: /root/workshop/src/main/java/com/temporal/training/solution7
-- title: Network Control Panel
+- id: uo36eauza382
+  title: Network Control Panel
   type: service
   hostname: workshop
   path: /
   port: 5000
-- title: Signals
+- id: vcyiyg1bkwj8
+  title: Signals
   type: terminal
   hostname: workshop
   workdir: /root/workshop
 difficulty: intermediate
 timelimit: 1800
+enhanced_loading: null
 ---
 
 # Manual Activity Retry

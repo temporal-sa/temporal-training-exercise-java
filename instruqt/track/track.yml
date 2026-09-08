@@ -1,4 +1,5 @@
 slug: temporal-in-practice-java
+id: hndxxuvytslm
 title: Temporal in Practice - Java
 teaser: Seven hands-on Java exercises. Write the Workflows, Activities, Signals, Queries
   and tests yourself.
@@ -15,12 +16,12 @@ description: |-
   you get stuck, not before.
 icon: ""
 tags:
-- java
-- signals
 - queries
+- signals
 - testing
 - temporal
 - workflows
+- java
 owner: temporal
 developers:
 - mark.feldman@temporal.io
@@ -52,4 +53,5 @@ lab_config:
   hideStopButton: false
   default_layout: AssignmentLeft
   default_layout_sidebar_size: 35
+checksum: "8630847685976469902"
 enhanced_loading: false

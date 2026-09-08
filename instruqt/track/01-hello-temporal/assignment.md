@@ -1,5 +1,6 @@
 ---
 slug: hello-temporal
+id: zkzmvbyvr9qr
 type: challenge
 title: 'Exercise 1: Hello Temporal'
 teaser: Write your first Workflow, Activity and Worker. Run it and read the event
@@ -26,34 +27,41 @@ notes:
     downloaded when the sandbox was built, so the first build is a
     compile, not a download.
 tabs:
-- title: Code Editor
+- id: oml13srzao9r
+  title: Code Editor
   type: code
   hostname: workshop
   path: /root/workshop/src/main/java/com/temporal/training/exercise1
-- title: Worker
+- id: fzkchlgtweg6
+  title: Worker
   type: terminal
   hostname: workshop
   workdir: /root/workshop
-- title: Terminal
+- id: 3zn1bbqh9mc3
+  title: Terminal
   type: terminal
   hostname: workshop
   workdir: /root/workshop
-- title: Temporal UI
+- id: tnqwjwv2ik53
+  title: Temporal UI
   type: service
   hostname: workshop
   path: /
   port: 8233
-- title: Solution
+- id: wc0wc2g77hsm
+  title: Solution
   type: code
   hostname: workshop
   path: /root/workshop/src/main/java/com/temporal/training/solution1
-- title: Network Control Panel
+- id: dphtytpmup15
+  title: Network Control Panel
   type: service
   hostname: workshop
   path: /
   port: 5000
 difficulty: basic
 timelimit: 1800
+enhanced_loading: null
 ---
 
 # Hello Temporal
