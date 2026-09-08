@@ -38,6 +38,10 @@ WORKSHOP_REF="${WORKSHOP_REF:-mark.feldman/instruqt}"
 WORKSHOP_DIR="${WORKSHOP_DIR:-/root/workshop}"
 JAVA_VERSION="17"
 
+# Written by step 4, read by step 5 and by every challenge's solve script.
+GRADLE_INIT=/root/gradle-warm.gradle
+CLASSPATH_FILE=/root/workshop-classpath.txt
+
 # Keep Gradle's cache off the repo tree. Left to itself Gradle uses ~/.gradle,
 # which is what we want, but an inherited GRADLE_USER_HOME from the image would
 # scatter caches/ daemon/ native/ wrapper/ into whatever directory it names.
@@ -110,7 +114,13 @@ ln -sf /root/.temporalio/bin/temporal /usr/local/bin/temporal
 log "Warming the Gradle cache (distribution + every configuration + compile)"
 cd "${WORKSHOP_DIR}"
 
-cat > /tmp/resolve-all.gradle << 'GRADLE'
+#    printRuntimeClasspath is kept around for step 5. Solve scripts run the
+#    Worker and the starter straight off that classpath with plain `java`,
+#    because Gradle is far too slow for them: `execute` is a blocking JavaExec
+#    that occupies the daemon for the Worker's whole life, so the starter has to
+#    spin up a *second* daemon behind it. Two cold daemon starts is roughly a
+#    minute, and `instruqt track test` gives up waiting long before that.
+cat > "${GRADLE_INIT}" << 'GRADLE'
 allprojects {
     tasks.register("resolveAllDependencies") {
         doLast {
@@ -124,12 +134,13 @@ allprojects {
             }
         }
     }
+    tasks.register("printRuntimeClasspath") {
+        doLast { println project.sourceSets.main.runtimeClasspath.asPath }
+    }
 }
 GRADLE
 
-./gradlew --console=plain -I /tmp/resolve-all.gradle resolveAllDependencies
-rm -f /tmp/resolve-all.gradle
-
+./gradlew --console=plain -I "${GRADLE_INIT}" resolveAllDependencies
 ./gradlew --console=plain classes testClasses
 
 # 5. mitmproxy and Flask, in their own venv so nothing about the workshop
@@ -168,15 +179,23 @@ keytool -importcert -noprompt -trustcacerts \
     -storepass changeit >/dev/null
 log "mitmproxy CA imported into the JDK truststore"
 
-# Stop the daemon the warm in step 4 started. A JVM reads the default
+# Replace the daemon the warm in step 4 started. A JVM reads the default
 # truststore once, on its first TLS handshake, and that daemon's first
 # handshake was against Maven Central seconds before the CA above existed. It
 # would happily survive into the attendee's session still not trusting
 # mitmproxy, and every HTTPS fetch through the proxy would fail with
 #   PKIX path building failed ... unable to find valid certification path
-# The next `./gradlew` starts a fresh daemon that reads the store as it is now.
-log "Stopping the Gradle daemon so the next one picks up the new truststore"
+#
+# Stop it, then immediately start its replacement rather than leaving the next
+# caller to pay for a cold start. The run that caches the classpath does that
+# for free.
+log "Replacing the Gradle daemon so it picks up the new truststore"
 ./gradlew --console=plain -q --stop || true
+
+# Cache the runtime classpath for the solve scripts, on a fresh daemon.
+./gradlew --console=plain -q -I "${GRADLE_INIT}" printRuntimeClasspath \
+    | tail -1 > "${CLASSPATH_FILE}"
+log "Runtime classpath cached to ${CLASSPATH_FILE} ($(tr ':' '\n' < "${CLASSPATH_FILE}" | wc -l | tr -d ' ') entries)"
 
 # 6. Gradle proxy settings. The JVM ignores HTTP_PROXY and friends, so routing
 #    Gradle through mitmproxy takes system properties instead. nonProxyHosts
@@ -240,6 +259,25 @@ if ! grep -q 'profile.d/workshop.sh' /etc/bash.bashrc 2>/dev/null; then
 # Workshop environment
 [ -f /etc/profile.d/workshop.sh ] && . /etc/profile.d/workshop.sh
 [ -f /usr/share/bash-completion/bash_completion ] && . /usr/share/bash-completion/bash_completion
+cd ${WORKSHOP_DIR} 2>/dev/null || true
+EOF
+fi
+
+# Land every terminal tab in the workshop directory.
+#
+# Three mechanisms, because the first two are not reliable on their own: the
+# tab's own `workdir` is applied before the shell reads its startup files, and
+# /etc/bash.bashrc is sourced BEFORE /root/.bashrc, so anything either of them
+# does can be undone by what follows. /root/.bashrc is the last one to run, so
+# it is the one that decides where the attendee actually lands.
+#
+# Every command in the assignments is relative to this directory: ./gradlew
+# lives here, and -PmainClass paths assume it. Landing in /root instead means
+# the first thing a learner types fails with "no such file or directory".
+if ! grep -q 'Workshop working directory' /root/.bashrc 2>/dev/null; then
+    cat >> /root/.bashrc << EOF
+
+# Workshop working directory (last word on where a tab opens)
 cd ${WORKSHOP_DIR} 2>/dev/null || true
 EOF
 fi

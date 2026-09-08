@@ -6,43 +6,56 @@
 # WorkflowClient.start with no approval, so the Workflow parks in RETRYING and
 # stays there. Unlike the other chapters, running the starter is not enough to
 # satisfy the check: the two Signals below are what completes the transfer.
+#
+# Runs the Worker and the starter with plain `java` off the classpath the
+# sandbox cached at provision time. `./gradlew execute` is a blocking JavaExec,
+# so the Worker would hold the daemon and the starter behind it would need a
+# second cold one -- about a minute that `instruqt track test` will not wait for.
 set -uo pipefail
 export GRADLE_USER_HOME=/root/.gradle
 cd /root/workshop || exit 0
 
+TASK_QUEUE="money-transfer-task-queue"
 SRC=src/main/java/com/temporal/training/solution7
 DST=src/main/java/com/temporal/training/exercise7
+CLASSPATH_FILE=/root/workshop-classpath.txt
 
 for f in "$SRC"/*.java; do
     sed 's/^package com\.temporal\.training\.solution7;/package com.temporal.training.exercise7;/' \
         "$f" > "$DST/$(basename "$f")"
 done
 
-pkill -f "com.temporal.training.*StartWorker" 2>/dev/null || true
+pkill -f "com.temporal.training" 2>/dev/null || true
 sleep 1
 
-nohup ./gradlew --console=plain -q execute \
-    -PmainClass=com.temporal.training.exercise7.StartWorker \
+./gradlew --console=plain -q classes || exit 0
+CP="$(cat "$CLASSPATH_FILE")"
+
+nohup java -cp "$CP" com.temporal.training.exercise7.StartWorker \
     > /tmp/solve-07-worker.log 2>&1 &
 WORKER_PID=$!
-sleep 20
 
-timeout 180 ./gradlew --console=plain -q execute \
-    -PmainClass=com.temporal.training.exercise7.StartWorkflow
+for _ in $(seq 1 90); do
+    POLLERS=$(temporal task-queue describe --task-queue "$TASK_QUEUE" -o json 2>/dev/null \
+        | jq '[.pollers[]? | select(.taskQueueType=="workflow")] | length' 2>/dev/null)
+    [ "${POLLERS:-0}" -ge 1 ] && break
+    sleep 1
+done
+
+java -cp "$CP" com.temporal.training.exercise7.StartWorkflow
 
 # The starter prints nothing, so the id comes back off the server.
 WF=""
-for _ in $(seq 1 20); do
+for _ in $(seq 1 30); do
     WF=$(temporal workflow list \
-        --query 'TaskQueue="money-transfer-task-queue" AND ExecutionStatus="Running"' \
+        --query "TaskQueue=\"$TASK_QUEUE\" AND ExecutionStatus=\"Running\"" \
         --limit 1 -o json 2>/dev/null | jq -r '.[0].execution.workflowId // empty')
     [ -n "$WF" ] && break
-    sleep 2
+    sleep 1
 done
 
 if [ -z "$WF" ]; then
-    echo "No running Workflow found on money-transfer-task-queue."
-    pkill -f "com.temporal.training.exercise7.StartWorker" 2>/dev/null || true
+    echo "No running Workflow found on $TASK_QUEUE."
     kill "$WORKER_PID" 2>/dev/null || true
     exit 0
 fi
@@ -56,7 +69,7 @@ for _ in $(seq 1 30); do
     STATUS=$(temporal workflow query --workflow-id "$WF" --type getStatus -o json 2>/dev/null \
         | jq -r '.queryResult[0] // empty')
     [ "$STATUS" = "RETRYING" ] && break
-    sleep 2
+    sleep 1
 done
 
 temporal workflow signal --workflow-id "$WF" --name retry \
@@ -64,11 +77,11 @@ temporal workflow signal --workflow-id "$WF" --name retry \
 
 for _ in $(seq 1 30); do
     temporal workflow list \
-        --query 'TaskQueue="money-transfer-task-queue" AND ExecutionStatus="Completed"' \
+        --query "TaskQueue=\"$TASK_QUEUE\" AND ExecutionStatus=\"Completed\"" \
         --limit 1 2>/dev/null | grep -q "Completed" && break
-    sleep 2
+    sleep 1
 done
 
-pkill -f "com.temporal.training.exercise7.StartWorker" 2>/dev/null || true
 kill "$WORKER_PID" 2>/dev/null || true
+pkill -f "com.temporal.training.exercise7.StartWorker" 2>/dev/null || true
 exit 0

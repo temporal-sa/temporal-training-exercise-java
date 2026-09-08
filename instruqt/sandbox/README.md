@@ -174,8 +174,9 @@ inherited from the base image.
 3. The Temporal CLI, symlinked to `/usr/local/bin/temporal`.
 4. Every resolvable configuration resolved, then `./gradlew classes testClasses`,
    to warm the Gradle cache.
-5. mitmproxy and Flask in `/opt/proxy-venv`, and the mitmproxy CA cert trusted
-   system-wide **and** imported into the JVM truststore.
+5. mitmproxy and Flask in `/opt/proxy-venv`, the mitmproxy CA cert trusted
+   system-wide **and** imported into the JVM truststore, the Gradle daemon
+   replaced, and the runtime classpath cached to `/root/workshop-classpath.txt`.
 6. Gradle proxy settings in `/root/.gradle/gradle.properties`.
 7. `proxy/` staged to `/root/proxy/` from the clone.
 8. Shell environment written to `/etc/profile.d/workshop.sh`.
@@ -214,6 +215,14 @@ installed.
 
 ## Four things that are easy to break
 
+**Terminal tabs have to land in the workshop directory.** A tab's own `workdir`
+is applied before the shell reads its startup files, and `/etc/bash.bashrc` is
+sourced *before* `/root/.bashrc`, so either can be undone by what runs after.
+Step 8 therefore writes the `cd` into `/root/.bashrc` as well, which is the last
+word. Every command in the assignments is relative to `/root/workshop` — the
+`./gradlew` wrapper lives there — so a tab that opens in `/root` makes the first
+thing a learner types fail.
+
 **Toolchain on the default PATH.** `temporal` is symlinked into
 `/usr/local/bin` and the JDK lands in `/usr/bin` on purpose. Check and solve
 scripts run non-interactively and never source a profile, so a `PATH` export in
@@ -231,6 +240,22 @@ the proxy so the kill switch cannot break the lab itself.
 makes the mitmproxy CA trusted for everything except Java. Without the
 `keytool -importcert` into `$JAVA_HOME/lib/security/cacerts`, every HTTPS fetch
 Gradle makes through the proxy fails certificate validation.
+
+**Solve scripts must not go through Gradle.** `./gradlew execute` is a blocking
+JavaExec, so a Worker started that way holds the daemon for its whole life and
+the starter behind it has to boot a second one. Two cold daemons is about a
+minute, and `instruqt track test` abandons the challenge well before that — it
+shows up as `Expected challenge status 'completed', but got 'started'` with no
+solve output in the logs at all. The solve scripts run both JVMs with plain
+`java -cp "$(cat /root/workshop-classpath.txt)"` instead, which step 5 caches.
+That took challenge 1's solve from over 48 seconds and unfinished to about 3.
+
+**Challenge check scripts get 60 seconds.** Every other lifecycle script gets 55
+minutes. That is why step 5 leaves a *warm* daemon behind rather than just
+stopping the stale one: a cold `./gradlew classes` in a check would eat a third
+of the budget before compiling anything. Measured with the daemon warm, the
+checks run in under a second, except exercise 6's, which runs the test suite and
+takes about eight.
 
 **The Gradle daemon outlives the truststore change.** A JVM reads the default
 truststore once, on its first TLS handshake. The daemon step 4 starts does that

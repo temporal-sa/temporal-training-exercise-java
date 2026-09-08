@@ -137,6 +137,16 @@ and the check passes on a stale result. The three `@Test` methods also ship
 with empty bodies, and JUnit passes an empty test, so the check counts
 `assertEquals` and `verify` calls as well as gating on the TODOs being gone.
 
+**Solve scripts bypass Gradle, and checks have 60 seconds.** Instruqt gives a
+challenge check script a 1-minute timeout; everything else gets 55 minutes. But
+`instruqt track test` also stops waiting for a challenge to reach `completed`
+after well under a minute, which a Gradle-driven solve cannot meet: `execute` is
+a blocking JavaExec, so the Worker holds the daemon and the starter behind it
+needs a second cold one. The solve scripts run both JVMs with plain `java -cp`
+off a classpath the sandbox caches at provision time, and wait on the task
+queue's `pollers[]` rather than sleeping a guessed interval — exercises 3 to 5
+Query the Workflow a second in, and a Query with no poller fails outright.
+
 **Exercise 7's solve script sends the Signals itself.** The starter hardcodes
 `invalid-account-456` and uses fire-and-forget `WorkflowClient.start` without
 approving anything, so the Workflow parks in `RETRYING` and stays there.

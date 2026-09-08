@@ -7,30 +7,50 @@
 # Not a plain cp. Every Java file declares its package, so the solution has to
 # be rewritten into the exercise's namespace on the way across. The file sets
 # are identical between the two packages, which is what makes the loop safe.
+#
+# And not ./gradlew execute either. That task is a blocking JavaExec, so the
+# Worker would hold the daemon for its whole life and the starter behind it
+# would have to boot a second one. Two cold daemons is about a minute, and
+# `instruqt track test` stops waiting for the challenge well before that.
+# Running both off the classpath the sandbox cached at provision time costs
+# about a second each.
 set -uo pipefail
 export GRADLE_USER_HOME=/root/.gradle
 cd /root/workshop || exit 0
 
+TASK_QUEUE="money-transfer-summaries-task-queue"
 SRC=src/main/java/com/temporal/training/solution5
 DST=src/main/java/com/temporal/training/exercise5
+CLASSPATH_FILE=/root/workshop-classpath.txt
 
 for f in "$SRC"/*.java; do
     sed "s/^package com\.temporal\.training\.solution5;/package com.temporal.training.exercise5;/" \
         "$f" > "$DST/$(basename "$f")"
 done
 
-pkill -f "com.temporal.training.*StartWorker" 2>/dev/null || true
+pkill -f "com.temporal.training" 2>/dev/null || true
 sleep 1
 
-nohup ./gradlew --console=plain -q execute \
-    -PmainClass=com.temporal.training.exercise5.StartWorker \
+./gradlew --console=plain -q classes || exit 0
+CP="$(cat "$CLASSPATH_FILE")"
+
+nohup java -cp "$CP" com.temporal.training.exercise5.StartWorker \
     > /tmp/solve-05-worker.log 2>&1 &
 WORKER_PID=$!
-sleep 20
 
-timeout 180 ./gradlew --console=plain -q execute \
-    -PmainClass=com.temporal.training.exercise5.StartWorkflow
+# Wait for the Worker to actually poll rather than sleeping a guessed number of
+# seconds. The starters for exercises 3 to 5 Query the Workflow a second in, and
+# a Query with no poller fails outright with "no poller seen for task queue
+# recently" -- so starting the client early does not just run slow, it breaks.
+for _ in $(seq 1 90); do
+    POLLERS=$(temporal task-queue describe --task-queue "$TASK_QUEUE" -o json 2>/dev/null \
+        | jq '[.pollers[]? | select(.taskQueueType=="workflow")] | length' 2>/dev/null)
+    [ "${POLLERS:-0}" -ge 1 ] && break
+    sleep 1
+done
 
-pkill -f "com.temporal.training.exercise5.StartWorker" 2>/dev/null || true
+java -cp "$CP" com.temporal.training.exercise5.StartWorkflow
+
 kill "$WORKER_PID" 2>/dev/null || true
+pkill -f "com.temporal.training.exercise5.StartWorker" 2>/dev/null || true
 exit 0
