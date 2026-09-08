@@ -1,0 +1,55 @@
+slug: temporal-in-practice-java
+title: Temporal in Practice - Java
+teaser: Seven hands-on Java exercises. Write the Workflows, Activities, Signals, Queries
+  and tests yourself.
+description: |-
+  A hands-on Temporal workshop in Java. Every challenge hands you a package
+  full of TODOs and a Temporal dev server that is already running.
+
+  Start with a Workflow that returns a greeting. Finish with a money
+  transfer Workflow that takes a Signal for approval, answers Queries about
+  its state, carries a search attribute, labels its own event history, and
+  parks on a bad account number until a Signal brings it the corrected data.
+
+  The Solution tab has the finished code for every exercise. Use it when
+  you get stuck, not before.
+icon: ""
+tags:
+- java
+- signals
+- queries
+- testing
+- temporal
+- workflows
+owner: temporal
+developers:
+- mark.feldman@temporal.io
+maintenance: true
+skipping_enabled: true
+idle_timeout: 3600
+timelimit: 14400
+sandbox_preset: temporal-in-practice-sandbox-java
+lab_config:
+  extend_ttl: 900
+  sidebar_enabled: true
+  feedback_recap_enabled: true
+  feedback_tab_enabled: true
+  loadingMessages:
+  - Ziggy is rehydrating after a 30-year nap...
+  - Ziggy is curling into a tun to ride out the cold start...
+  - Tardigrades are durable. Temporal Workflows are durable. Loading both...
+  - Ziggy is waiting on the Gradle daemon like the rest of us...
+  - Ziggy is in cryptobiosis while the Namespace comes up...
+  - Ziggy has outlived five mass extinctions. Your Worker will start any moment now...
+  - Ziggy is reading the Workflow code through his single eyespot...
+  - Ziggy says if a Workflow can sleep ten minutes, he can sleep ten years...
+  - Ziggy is squinting at your Event History through tiny tardigrade eyes...
+  - Ziggy has eight legs and four pairs of claws. None of them help with YAML...
+  - Ziggy walks at 250 micrometers per second. So does a cold JVM...
+  theme:
+    name: modern-dark
+  override_challenge_layout: true
+  hideStopButton: false
+  default_layout: AssignmentLeft
+  default_layout_sidebar_size: 35
+enhanced_loading: false

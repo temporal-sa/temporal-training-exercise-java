@@ -1,0 +1,36 @@
+#!/bin/bash
+# ABOUTME: Solve script. Mimics a learner solving the challenge.
+# Runs on Skip and on `instruqt track test`. It must leave the check passing:
+# copy the finished code into the exercise package, then drive a Workflow to
+# completion on the task queue the check queries.
+#
+# Not a plain cp. Every Java file declares its package, so the solution has to
+# be rewritten into the exercise's namespace on the way across. The file sets
+# are identical between the two packages, which is what makes the loop safe.
+set -uo pipefail
+export GRADLE_USER_HOME=/root/.gradle
+cd /root/workshop || exit 0
+
+SRC=src/main/java/com/temporal/training/solution4
+DST=src/main/java/com/temporal/training/exercise4
+
+for f in "$SRC"/*.java; do
+    sed "s/^package com\.temporal\.training\.solution4;/package com.temporal.training.exercise4;/" \
+        "$f" > "$DST/$(basename "$f")"
+done
+
+pkill -f "com.temporal.training.*StartWorker" 2>/dev/null || true
+sleep 1
+
+nohup ./gradlew --console=plain -q execute \
+    -PmainClass=com.temporal.training.exercise4.StartWorker \
+    > /tmp/solve-04-worker.log 2>&1 &
+WORKER_PID=$!
+sleep 20
+
+timeout 180 ./gradlew --console=plain -q execute \
+    -PmainClass=com.temporal.training.exercise4.StartWorkflow
+
+pkill -f "com.temporal.training.exercise4.StartWorker" 2>/dev/null || true
+kill "$WORKER_PID" 2>/dev/null || true
+exit 0

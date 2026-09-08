@@ -1,0 +1,42 @@
+#!/bin/bash
+# ABOUTME: Check script. Fill-in-the-blanks style.
+# Gate 1: the TODOs are gone and upsertTypedSearchAttributes is called.
+# Gate 2: the module compiles.
+# Gate 3: an exercise 4 execution actually carries AccountId="account-123",
+#         which only happens if the upsert succeeded on the server.
+export GRADLE_USER_HOME=/root/.gradle
+fail() { echo "FAIL: $1"; exit 1; }
+pass() { echo "PASS: $1"; }
+
+EX=/root/workshop/src/main/java/com/temporal/training/exercise4
+WF="$EX/MoneyTransferWorkflowImpl.java"
+
+if grep -q "TODO" "$WF" 2>/dev/null; then
+    fail "MoneyTransferWorkflowImpl.java still has TODO comments. Implement them, then check again."
+fi
+pass "All TODOs implemented"
+
+if ! grep -q "upsertTypedSearchAttributes" "$WF" 2>/dev/null; then
+    fail "MoneyTransferWorkflowImpl.java never calls Workflow.upsertTypedSearchAttributes()."
+fi
+pass "upsertTypedSearchAttributes called"
+
+cd /root/workshop || fail "Workshop directory is missing."
+if ! OUT=$(./gradlew --console=plain -q classes 2>&1); then
+    echo "$OUT" | tail -20
+    fail "The project does not compile. Fix the errors above, then check again."
+fi
+pass "Project compiles"
+
+# Scoped to this exercise's task queue: exercises 5 and 7 tag the same account,
+# so AccountId alone would pass on evidence from a different chapter.
+TAGGED=$(temporal workflow list \
+    --address 127.0.0.1:7233 \
+    --namespace default \
+    --query 'AccountId="account-123" AND TaskQueue="money-transfer-search-attributes-task-queue"' \
+    --limit 1 2>/dev/null | grep -c "MoneyTransferWorkflow" || true)
+
+if [ "$TAGGED" -lt 1 ]; then
+    fail "No exercise 4 Workflow carries AccountId=\"account-123\" yet. Run the Worker and StartWorkflow, then check again."
+fi
+pass "Workflow found by AccountId search attribute"

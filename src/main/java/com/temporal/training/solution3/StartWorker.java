@@ -7,7 +7,7 @@ import io.temporal.worker.WorkerFactory;
 
 public class StartWorker {
     
-    public static final String TASK_QUEUE = "MoneyTransferTaskQueue";
+    public static final String TASK_QUEUE = "money-transfer-queries-task-queue";
     
     public static void main(String[] args) {
         WorkflowServiceStubs service = WorkflowServiceStubs.newLocalServiceStubs();

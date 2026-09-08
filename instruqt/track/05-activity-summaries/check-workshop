@@ -1,0 +1,53 @@
+#!/bin/bash
+# ABOUTME: Check script. Fill-in-the-blanks style.
+# Gate 1: TODOs gone. Gate 2: the Activity stubs carry a summary, the starter
+# sets a static summary, and it compiles. Gate 3: a Workflow completed.
+export GRADLE_USER_HOME=/root/.gradle
+fail() { echo "FAIL: $1"; exit 1; }
+pass() { echo "PASS: $1"; }
+
+EX=/root/workshop/src/main/java/com/temporal/training/exercise5
+WF="$EX/MoneyTransferWorkflowImpl.java"
+
+for f in MoneyTransferWorkflowImpl.java StartWorkflow.java; do
+    if grep -q "TODO" "$EX/$f" 2>/dev/null; then
+        fail "$f still has TODO comments. Implement them, then check again."
+    fi
+done
+pass "All TODOs implemented"
+
+if ! grep -q "setSummary(" "$WF" 2>/dev/null; then
+    fail "MoneyTransferWorkflowImpl.java never calls ActivityOptions.setSummary(). All three Activities need one."
+fi
+pass "Activity stubs carry a summary"
+
+# The three factory methods each have to pass their own text through, otherwise
+# withdraw, deposit and refund all render with the same label in the UI.
+DISTINCT=$(grep -c 'createActivity("' "$WF" 2>/dev/null || true)
+if [ "$DISTINCT" -lt 3 ]; then
+    fail "Found $DISTINCT summary strings in MoneyTransferWorkflowImpl.java. Withdraw, deposit and refund each need their own."
+fi
+pass "Withdraw, deposit and refund have distinct summaries"
+
+if ! grep -q "setStaticSummary(" "$EX/StartWorkflow.java" 2>/dev/null; then
+    fail "StartWorkflow.java never calls WorkflowOptions.setStaticSummary(). The execution itself needs a summary too."
+fi
+pass "Execution carries a static summary"
+
+cd /root/workshop || fail "Workshop directory is missing."
+if ! OUT=$(./gradlew --console=plain -q classes 2>&1); then
+    echo "$OUT" | tail -20
+    fail "The project does not compile. Fix the errors above, then check again."
+fi
+pass "Project compiles"
+
+COMPLETED=$(temporal workflow list \
+    --address 127.0.0.1:7233 \
+    --namespace default \
+    --query 'TaskQueue="money-transfer-summaries-task-queue" AND ExecutionStatus="Completed"' \
+    --limit 1 2>/dev/null | grep -c "Completed" || true)
+
+if [ "$COMPLETED" -lt 1 ]; then
+    fail "No completed money transfer Workflow. Start the Worker, run StartWorkflow, and wait for the result to print."
+fi
+pass "Money transfer Workflow completed"

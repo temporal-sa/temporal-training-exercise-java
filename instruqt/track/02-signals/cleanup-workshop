@@ -1,0 +1,11 @@
+#!/bin/bash
+# ABOUTME: Per-challenge cleanup. Kill the Worker and the starter.
+# One pkill pattern per line: macOS pkill has no alternation, and these scripts
+# get tested on a Mac before they are pushed.
+set -euo pipefail
+
+pkill -f "com.temporal.training.*StartWorker"   2>/dev/null || true
+pkill -f "com.temporal.training.*StartWorkflow" 2>/dev/null || true
+sleep 1
+
+echo "Exercise 2 cleanup: OK"
