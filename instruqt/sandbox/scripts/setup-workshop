@@ -26,8 +26,15 @@ set -euo pipefail
 
 # Pin these to a tag or a commit before a live workshop so every attendee gets
 # the same code regardless of what landed on main that morning.
-WORKSHOP_REPO="${WORKSHOP_REPO:-https://github.com/temporal-sa/temporal-training-exercise-java.git}"
-WORKSHOP_REF="${WORKSHOP_REF:-main}"
+#
+# TEMPORARY: pointed at the fork branch that carries instruqt/. Provisioning
+# clones this repo to get the exercise code and instruqt/sandbox/proxy/, and
+# temporal-sa/main has neither until PR #1 merges. Step 7 fails outright
+# without them. Put both of these back to
+#   https://github.com/temporal-sa/temporal-training-exercise-java.git @ main
+# once that lands, then push and publish the preset again.
+WORKSHOP_REPO="${WORKSHOP_REPO:-https://github.com/mark-feldman/temporal-training-exercise-java.git}"
+WORKSHOP_REF="${WORKSHOP_REF:-mark.feldman/instruqt}"
 WORKSHOP_DIR="${WORKSHOP_DIR:-/root/workshop}"
 JAVA_VERSION="17"
 
@@ -116,12 +123,19 @@ MITM_CA=/root/.mitmproxy/mitmproxy-ca-cert.pem
 cp "${MITM_CA}" /usr/local/share/ca-certificates/mitmproxy-ca.crt
 update-ca-certificates
 
+# -cacerts rather than -keystore: it resolves the running JDK's own store and
+# avoids keytool's "use -cacerts option to access cacerts keystore" warning.
+#
+# On Ubuntu the update-ca-certificates hook from ca-certificates-java usually
+# imports this as debian:mitmproxy-ca.pem already. This is deliberate
+# belt-and-braces, under a different alias, so the JVM trusts the CA even on an
+# image without that hook.
 keytool -importcert -noprompt -trustcacerts \
     -alias mitmproxy \
     -file "${MITM_CA}" \
-    -keystore "${JAVA_HOME}/lib/security/cacerts" \
+    -cacerts \
     -storepass changeit >/dev/null
-log "mitmproxy CA imported into ${JAVA_HOME}/lib/security/cacerts"
+log "mitmproxy CA imported into the JDK truststore"
 
 # 6. Gradle proxy settings. The JVM ignores HTTP_PROXY and friends, so routing
 #    Gradle through mitmproxy takes system properties instead. nonProxyHosts
