@@ -15,12 +15,12 @@ repositories {
 
 dependencies {
     implementation 'io.temporal:temporal-sdk:1.38.0'
-    implementation 'ch.qos.logback:logback-classic:1.4.11'
+    implementation 'ch.qos.logback:logback-classic:1.6.3'
     
     testImplementation 'io.temporal:temporal-testing:1.38.0'
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.4'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    testImplementation 'org.mockito:mockito-core:5.5.0'
+    testImplementation 'org.mockito:mockito-core:5.23.0'
 }
 
 test {
