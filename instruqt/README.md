@@ -166,7 +166,7 @@ distribution service, `temporal.download`) produces broken pooled sandboxes
 silently.
 
 Hot Start matters more here than it does for the Python track. Provisioning
-downloads a JDK, the Gradle 8.8 distribution and the whole SDK dependency tree
+downloads a JDK, the Gradle 9.7.1 distribution and the whole SDK dependency tree
 before it compiles fifteen packages. Do not put an attendee in front of a cold
 sandbox.
 

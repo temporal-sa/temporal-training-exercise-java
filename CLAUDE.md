@@ -35,7 +35,9 @@ temporal server start-dev --search-attribute AccountId=Text
 ```
 
 Running an exercise always needs two terminals plus the dev server: `StartWorker` in one,
-`StartWorkflow` in the other. Java 17 toolchain; `temporal-sdk` 1.31.0, `temporal-testing` 1.20.1.
+`StartWorkflow` in the other. Java 17 toolchain, Gradle 9.7.1; `temporal-sdk` and `temporal-testing`
+both 1.38.0 — keep them on the same version, since a skew pulls two copies of the SDK onto the test
+classpath.
 
 ## Task queues differ per exercise
 
@@ -120,8 +122,22 @@ lives only in the `solution6` test, which is also the only thing CI runs
 - `com.temporal.training.greeting` is plain Java with no Temporal involvement — a scratch demo, not
   part of the exercise sequence.
 - `caches/`, `daemon/`, `jdks/`, `native/`, `wrapper/` at the repo root are stray Gradle-home
-  artifacts, created when `GRADLE_USER_HOME` points at the repo root. They are gitignored — never
-  commit them, and exclude them from searches.
+  artifacts — an entire `GRADLE_USER_HOME` dumped into the project, several hundred MB of it. They
+  are gitignored — never commit them, and exclude them from searches. Do not confuse the root
+  `wrapper/` with `gradle/wrapper/`, which is the real, tracked wrapper.
+
+  They come from IntelliJ's **Gradle user home** being set to the project directory. That setting is
+  IDE-global, not per project, so `.idea/gradle.xml` will not mention it — it is `serviceDirectoryPath`
+  in `~/Library/Application Support/JetBrains/<IDE>/options/gradle.settings.xml`. Blank means
+  `~/.gradle`, which is what it should be. Fix it in Settings → Build Tools → Gradle rather than by
+  editing the XML, which the IDE rewrites on exit.
+
+  Opening the project in `.devcontainer/` makes IntelliJ store that path with its container prefix
+  baked into the value — `/$devcontainer.ij/<container-id>@/IdeaProjects/<project>` — and Gradle
+  inside the container then dies with `Could not create parent directory for lock file
+  /$devcontainer.ij/...`, because it tries to mkdir that literally at `/`. The failure only surfaces
+  when the wrapper must download a distribution it has not cached, so bumping the Gradle version is
+  the usual trigger — the setting was already wrong before.
 - A change to `exerciseN` or `solutionN` usually needs a matching change under `instruqt/track/`.
   The check scripts grep for specific filenames and API markers, and the solve scripts copy every
   `.java` from `solutionN` into `exerciseN` with a `sed` on the package declaration. Rename a file,

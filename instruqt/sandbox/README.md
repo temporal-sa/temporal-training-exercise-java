@@ -183,7 +183,7 @@ inherited from the base image.
 9. mitmproxy, the control panel, and `temporal server start-dev` started, then
    a health wait.
 
-Step 4 is the expensive one: it pulls `gradle-8.8-all.zip`, the whole Temporal
+Step 4 is the expensive one: it pulls `gradle-9.7.1-all.zip`, the whole Temporal
 SDK dependency tree, and then compiles fifteen packages plus the test sources.
 Observed at roughly 30 seconds on a real provision, though it is entirely at the
 mercy of Maven Central. It is a large part of why Hot Start matters here.

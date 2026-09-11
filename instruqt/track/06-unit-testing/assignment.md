@@ -86,7 +86,7 @@ declared on the builder so it exists before the environment is ever created:
 @RegisterExtension
 public static final TestWorkflowExtension testWorkflowExtension =
         TestWorkflowExtension.newBuilder()
-                .setWorkflowTypes(MoneyTransferWorkflowImpl.class)
+                .registerWorkflowImplementationTypes(MoneyTransferWorkflowImpl.class)
                 .registerSearchAttribute("AccountId", IndexedValueType.INDEXED_VALUE_TYPE_TEXT)
                 .setDoNotStart(true)
                 .build();

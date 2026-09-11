@@ -22,7 +22,7 @@ public class MoneyTransferWorkflowTest {
     @RegisterExtension
     public static final TestWorkflowExtension testWorkflowExtension =
             TestWorkflowExtension.newBuilder()
-                    .setWorkflowTypes(MoneyTransferWorkflowImpl.class)
+                    .registerWorkflowImplementationTypes(MoneyTransferWorkflowImpl.class)
                     // TODO: Register the "AccountId" search attribute with TEXT type
                     // Hint: .registerSearchAttribute("AccountId", IndexedValueType.INDEXED_VALUE_TYPE_TEXT)
                     .setDoNotStart(true)

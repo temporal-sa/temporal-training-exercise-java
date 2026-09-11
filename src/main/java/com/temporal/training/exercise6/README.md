@@ -29,7 +29,7 @@ On the extension builder, so the attribute exists before the test environment is
 @RegisterExtension
 public static final TestWorkflowExtension testWorkflowExtension =
         TestWorkflowExtension.newBuilder()
-                .setWorkflowTypes(MoneyTransferWorkflowImpl.class)
+                .registerWorkflowImplementationTypes(MoneyTransferWorkflowImpl.class)
                 .registerSearchAttribute("AccountId", IndexedValueType.INDEXED_VALUE_TYPE_TEXT)
                 .setDoNotStart(true)
                 .build();

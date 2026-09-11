@@ -97,7 +97,7 @@ ln -sf /root/.temporalio/bin/temporal /usr/local/bin/temporal
 # 4. Warm the Gradle cache. This runs BEFORE the proxy environment exists, so
 #    it reaches Gradle's distribution service and Maven Central directly.
 #
-#    Without this the first attendee command downloads gradle-8.8-all.zip plus
+#    Without this the first attendee command downloads gradle-9.7.1-all.zip plus
 #    every SDK dependency and looks like a hang.
 #
 #    `classes testClasses` is NOT enough on its own. It resolves the two compile
