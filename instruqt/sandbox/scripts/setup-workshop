@@ -121,12 +121,18 @@ cd "${WORKSHOP_DIR}"
 #    spin up a *second* daemon behind it. Two cold daemon starts is roughly a
 #    minute, and `instruqt track test` gives up waiting long before that.
 cat > "${GRADLE_INIT}" << 'GRADLE'
-allprojects {
+allprojects { proj ->
     tasks.register("resolveAllDependencies") {
+        // Snapshot at configuration time, resolve at execution time. Holding a
+        // Configuration across that boundary is not configuration-cache safe,
+        // and reaching for `configurations` inside doLast fails outright once
+        // the cache is mandatory. A FileCollection survives the trip.
+        def resolvable = proj.configurations.matching { it.canBeResolved }
+                             .collect { [name: it.name, files: it.incoming.files] }
         doLast {
-            configurations.matching { it.canBeResolved }.each { c ->
+            resolvable.each { c ->
                 try {
-                    c.resolve()
+                    c.files.files
                     logger.lifecycle("resolved ${c.name}")
                 } catch (Exception e) {
                     logger.lifecycle("skipped ${c.name}: ${e.message}")
@@ -135,7 +141,11 @@ allprojects {
         }
     }
     tasks.register("printRuntimeClasspath") {
-        doLast { println project.sourceSets.main.runtimeClasspath.asPath }
+        // Not `project.sourceSets` inside doLast: Task.project at execution
+        // time is deprecated in Gradle 9 and an error in Gradle 10, which would
+        // take every solve script down with it.
+        def runtimeClasspath = proj.sourceSets.main.runtimeClasspath
+        doLast { println runtimeClasspath.asPath }
     }
 }
 GRADLE
