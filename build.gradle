@@ -32,9 +32,13 @@ application {
 }
 
 tasks.register('execute', JavaExec) {
-    mainClass = findProperty("mainClass") ?: ""
+    // providers.gradleProperty gives a Provider<String>; project.property returns
+    // Object, which makes .split(" ") resolve to Groovy's DefaultGroovyMethods
+    // split(Closure) instead of String.split(String).
+    mainClass = providers.gradleProperty('mainClass').orElse('')
     classpath = sourceSets.main.runtimeClasspath
-    if (project.hasProperty("args")) {
-        args project.property("args").split(" ")
+    def execArgs = providers.gradleProperty('args')
+    if (execArgs.present) {
+        args execArgs.get().split(' ')
     }
 }
