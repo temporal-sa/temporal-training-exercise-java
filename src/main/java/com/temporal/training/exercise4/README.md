@@ -46,4 +46,4 @@ temporal server start-dev --search-attribute AccountId=Text
 - Can filter workflows by AccountId in the Web UI
 
 ## Next Steps
-Exercise 5 will focus on testing strategies with TestWorkflowRule and time manipulation.
+Exercise 6 will focus on testing strategies with TestWorkflowExtension and time manipulation.

@@ -47,7 +47,7 @@ temporal server start-dev --search-attribute AccountId=Text
 - Enhanced monitoring in Temporal Web UI
 
 ### [Exercise 6: Testing Strategy](src/main/java/com/temporal/training/exercise6) (45 min)
-- Unit tests with TestWorkflowRule
+- Unit tests with TestWorkflowExtension (JUnit 5)
 - Time skipping for fast tests
 - Activity mocking with Mockito
 - Search attribute registration in tests

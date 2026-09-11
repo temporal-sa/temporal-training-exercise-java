@@ -19,9 +19,9 @@ notes:
   contents: |-
     # No server needed
 
-    `TestWorkflowRule` spins up an in-process test server. These tests run
-    in CI with nothing installed, and the whole suite finishes in a few
-    seconds.
+    `TestWorkflowExtension` spins up an in-process test server. These
+    tests run in CI with nothing installed, and the whole suite finishes
+    in a few seconds.
 tabs:
 - id: 3njk0ae3pf2h
   title: Code Editor
@@ -62,7 +62,7 @@ enhanced_loading: null
 
 # Unit Testing Workflows
 
-No Worker to start. No dev server to talk to. One test file, nine TODOs.
+No Worker to start. No dev server to talk to. One test file, eight TODOs.
 
 > [!IMPORTANT]
 > This is the only exercise whose code lives under `src/test`, not
@@ -76,20 +76,44 @@ No Worker to start. No dev server to talk to. One test file, nine TODOs.
 Open the [button label="Code Editor" background="#444CE7"](tab-0) and work
 through `MoneyTransferWorkflowTest.java`.
 
-### The rule
+### The extension
 
-`TestWorkflowRule` is built with `setDoNotStart(true)`, which is deliberate.
-Search attributes have to be registered **before** the environment starts, so
-each test registers the attribute and the mocked Activities first, then calls
-`start()`:
+`TestWorkflowExtension` is the JUnit 5 replacement for `TestWorkflowRule`. It
+goes on a static field with `@RegisterExtension`, and the search attribute is
+declared on the builder so it exists before the environment is ever created:
 
 ```java
-testWorkflowRule.getTestEnvironment().registerSearchAttribute(
-    "AccountId", IndexedValueType.INDEXED_VALUE_TYPE_TEXT
-);
-testWorkflowRule.getWorker().registerActivitiesImplementations(mockActivities);
-testWorkflowRule.getTestEnvironment().start();
+@RegisterExtension
+public static final TestWorkflowExtension testWorkflowExtension =
+        TestWorkflowExtension.newBuilder()
+                .setWorkflowTypes(MoneyTransferWorkflowImpl.class)
+                .registerSearchAttribute("AccountId", IndexedValueType.INDEXED_VALUE_TYPE_TEXT)
+                .setDoNotStart(true)
+                .build();
 ```
+
+`setDoNotStart(true)` is deliberate. It leaves the environment stopped so each
+test can register its own mocked Activities on the Worker first:
+
+```java
+worker.registerActivitiesImplementations(mockActivities);
+testEnv.start();
+```
+
+### Injected parameters
+
+You never build a client or a stub. Ask for what you need in the test method
+signature and the extension resolves it — the `TestWorkflowEnvironment`, the
+`Worker`, and a Workflow stub already bound to this test's own task queue:
+
+```java
+@Test
+public void testSuccessfulTransfer(
+        TestWorkflowEnvironment testEnv, Worker worker, MoneyTransferWorkflow workflow) {
+```
+
+Each test method gets a fresh environment, and the extension closes it
+afterwards — there is no teardown method to write.
 
 ### The mock
 
@@ -113,8 +137,8 @@ blocks until the Workflow finishes. Queue it up first and let the test clock
 deliver it:
 
 ```java
-testWorkflowRule.getTestEnvironment().registerDelayedCallback(
-    java.time.Duration.ofSeconds(1),
+testEnv.registerDelayedCallback(
+    Duration.ofSeconds(1),
     () -> workflow.approve(true)
 );
 
@@ -141,9 +165,11 @@ verify(mockActivities, never()).refund(anyString(), anyDouble());
 ```
 
 > [!NOTE]
-> These are **JUnit 4** tests: `org.junit.Test`, `@Rule`, `@After`. The
-> imports are already at the top of the file. A test written with JUnit 5
-> annotations compiles and then silently never runs.
+> These are **JUnit 5** tests: `org.junit.jupiter.api.Test` and
+> `@RegisterExtension`, with assertions from
+> `org.junit.jupiter.api.Assertions`. The imports are already at the top of
+> the file. A test written with JUnit 4 annotations compiles and then
+> silently never runs.
 
 # Run the Tests
 
@@ -170,10 +196,13 @@ Click **Check** when all three pass.
 
 # Key Takeaways
 
-- `TestWorkflowRule` gives you a test server in-process, no dev server required.
+- `TestWorkflowExtension` gives you a test server in-process, no dev server
+  required, and injects the environment, Worker, and Workflow stub as test
+  method parameters.
 - Time skipping fast-forwards timers, so testing a long wait costs nothing.
 - `registerDelayedCallback` is how a Signal reaches a Workflow that a blocking
   test call is already waiting on.
 - Mock Activity interfaces with `withSettings().withoutAnnotations()`.
-- Register search attributes before `start()`, which is why the rule is built
-  with `setDoNotStart(true)`.
+- Register search attributes on the extension builder, and register mocked
+  Activities before `start()`, which is why the extension is built with
+  `setDoNotStart(true)`.

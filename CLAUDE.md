@@ -85,17 +85,26 @@ signals, an approval timeout via `Workflow.await(Duration, ...)`, `RetryOptions`
 
 ## Testing conventions
 
-Tests are **JUnit 4**, not 5. `build.gradle` calls `useJUnitPlatform()` and then `useJUnit()`, and the
-last call wins — a test written with JUnit 5 annotations will silently not run. Use
-`org.junit.Test` / `@Rule` / `@After`.
+Tests are **JUnit 5**, not 4. `build.gradle` declares only `org.junit.jupiter:junit-jupiter` and
+calls `useJUnitPlatform()` — a test written with JUnit 4 annotations (`org.junit.Test`, `@Rule`)
+will silently not run. Use `org.junit.jupiter.api.Test` / `@RegisterExtension` and assertions from
+`org.junit.jupiter.api.Assertions`.
 
-The `TestWorkflowRule` setup in `solution6/MoneyTransferWorkflowTest.java` is the canonical pattern:
+The `TestWorkflowExtension` setup in `solution6/MoneyTransferWorkflowTest.java` is the canonical
+pattern:
 
-- `setDoNotStart(true)`, then register the search attribute and mock activities, then
-  `getTestEnvironment().start()`. Search attributes must be registered before start.
+- `@RegisterExtension` on a `public static final` field. Search attributes go on the builder
+  (`registerSearchAttribute("AccountId", IndexedValueType.INDEXED_VALUE_TYPE_TEXT)`) — they must
+  exist before the environment is created, and there is no post-construction hook for them.
+  Drop that line and the workflow task fails in a loop and the test **hangs** rather than failing.
+- `setDoNotStart(true)`, then register the mock activities on the injected `Worker`, then
+  `testEnv.start()`.
+- Test methods take their dependencies as parameters — `TestWorkflowEnvironment`, `Worker`, and the
+  workflow interface itself (the extension injects a stub bound to that test's task queue). Each
+  test gets a fresh environment and the extension closes it, so there is no teardown method.
 - Mock activity interfaces with `Mockito.mock(X.class, withSettings().withoutAnnotations())` —
   without `withoutAnnotations()` the Temporal annotations break the mock.
-- Drive signals with `getTestEnvironment().registerDelayedCallback(...)` for time skipping; never sleep.
+- Drive signals with `testEnv.registerDelayedCallback(...)` for time skipping; never sleep.
 
 `exercise6`'s test methods are TODO stubs with empty bodies, so they pass vacuously — real coverage
 lives only in the `solution6` test, which is also the only thing CI runs

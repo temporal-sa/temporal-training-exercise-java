@@ -1,14 +1,16 @@
 package com.temporal.training.solution6;
 
 import io.temporal.api.enums.v1.IndexedValueType;
-import io.temporal.client.WorkflowOptions;
-import io.temporal.testing.TestWorkflowRule;
-import org.junit.After;
-import org.junit.Rule;
-import org.junit.Test;
+import io.temporal.testing.TestWorkflowEnvironment;
+import io.temporal.testing.TestWorkflowExtension;
+import io.temporal.worker.Worker;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.mockito.Mockito;
 
-import static org.junit.Assert.assertEquals;
+import java.time.Duration;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -17,45 +19,29 @@ import static org.mockito.Mockito.withSettings;
 
 public class MoneyTransferWorkflowTest {
 
-    @Rule
-    public TestWorkflowRule testWorkflowRule = TestWorkflowRule.newBuilder()
-            .setWorkflowTypes(MoneyTransferWorkflowImpl.class)
-            .setDoNotStart(true)
-            .build();
-
-    private void registerSearchAttribute() {
-        testWorkflowRule.getTestEnvironment().registerSearchAttribute(
-            "AccountId", IndexedValueType.INDEXED_VALUE_TYPE_TEXT
-        );
-    }
-
-    @After
-    public void tearDown() {
-        testWorkflowRule.getTestEnvironment().shutdown();
-    }
+    @RegisterExtension
+    public static final TestWorkflowExtension testWorkflowExtension =
+            TestWorkflowExtension.newBuilder()
+                    .setWorkflowTypes(MoneyTransferWorkflowImpl.class)
+                    .registerSearchAttribute("AccountId", IndexedValueType.INDEXED_VALUE_TYPE_TEXT)
+                    .setDoNotStart(true)
+                    .build();
 
     @Test
-    public void testSuccessfulTransfer() {
+    public void testSuccessfulTransfer(
+            TestWorkflowEnvironment testEnv, Worker worker, MoneyTransferWorkflow workflow) {
         BankingActivities mockActivities = Mockito.mock(
                 BankingActivities.class,
                 withSettings().withoutAnnotations()
         );
-        
-        registerSearchAttribute();
-        testWorkflowRule.getWorker().registerActivitiesImplementations(mockActivities);
-        testWorkflowRule.getTestEnvironment().start();
 
-        MoneyTransferWorkflow workflow = testWorkflowRule
-                .getWorkflowClient()
-                .newWorkflowStub(
-                        MoneyTransferWorkflow.class,
-                        WorkflowOptions.newBuilder().setTaskQueue(testWorkflowRule.getTaskQueue()).build()
-                );
-        
+        worker.registerActivitiesImplementations(mockActivities);
+        testEnv.start();
+
         TransferRequest request = new TransferRequest("account-123", "account-456", 100.0, "transfer-1");
 
-        testWorkflowRule.getTestEnvironment().registerDelayedCallback(
-            java.time.Duration.ofSeconds(1),
+        testEnv.registerDelayedCallback(
+            Duration.ofSeconds(1),
             () -> workflow.approve(true)
         );
 
@@ -63,34 +49,27 @@ public class MoneyTransferWorkflowTest {
 
         assertEquals("Transfer completed successfully", result);
         assertEquals(TransferStatus.COMPLETED, workflow.getStatus());
-        
+
         verify(mockActivities).withdraw("account-123", 100.0);
         verify(mockActivities).deposit("account-456", 100.0);
         verify(mockActivities, never()).refund(anyString(), anyDouble());
     }
 
     @Test
-    public void testRejectedTransfer() {
+    public void testRejectedTransfer(
+            TestWorkflowEnvironment testEnv, Worker worker, MoneyTransferWorkflow workflow) {
         BankingActivities mockActivities = Mockito.mock(
                 BankingActivities.class,
                 withSettings().withoutAnnotations()
         );
-        
-        registerSearchAttribute();
-        testWorkflowRule.getWorker().registerActivitiesImplementations(mockActivities);
-        testWorkflowRule.getTestEnvironment().start();
 
-        MoneyTransferWorkflow workflow = testWorkflowRule
-                .getWorkflowClient()
-                .newWorkflowStub(
-                        MoneyTransferWorkflow.class,
-                        WorkflowOptions.newBuilder().setTaskQueue(testWorkflowRule.getTaskQueue()).build()
-                );
-        
+        worker.registerActivitiesImplementations(mockActivities);
+        testEnv.start();
+
         TransferRequest request = new TransferRequest("account-123", "account-456", 100.0, "transfer-2");
 
-        testWorkflowRule.getTestEnvironment().registerDelayedCallback(
-            java.time.Duration.ofSeconds(1),
+        testEnv.registerDelayedCallback(
+            Duration.ofSeconds(1),
             () -> workflow.approve(false)
         );
 
@@ -98,39 +77,32 @@ public class MoneyTransferWorkflowTest {
 
         assertEquals("Transfer rejected and refunded", result);
         assertEquals(TransferStatus.CANCELLED, workflow.getStatus());
-        
+
         verify(mockActivities).withdraw("account-123", 100.0);
         verify(mockActivities).refund("account-123", 100.0);
         verify(mockActivities, never()).deposit(anyString(), anyDouble());
     }
 
     @Test
-    public void testQueryStatus() {
+    public void testQueryStatus(
+            TestWorkflowEnvironment testEnv, Worker worker, MoneyTransferWorkflow workflow) {
         BankingActivities mockActivities = Mockito.mock(
                 BankingActivities.class,
                 withSettings().withoutAnnotations()
         );
-        
-        registerSearchAttribute();
-        testWorkflowRule.getWorker().registerActivitiesImplementations(mockActivities);
-        testWorkflowRule.getTestEnvironment().start();
 
-        MoneyTransferWorkflow workflow = testWorkflowRule
-                .getWorkflowClient()
-                .newWorkflowStub(
-                        MoneyTransferWorkflow.class,
-                        WorkflowOptions.newBuilder().setTaskQueue(testWorkflowRule.getTaskQueue()).build()
-                );
-        
+        worker.registerActivitiesImplementations(mockActivities);
+        testEnv.start();
+
         TransferRequest request = new TransferRequest("account-123", "account-456", 100.0, "transfer-3");
 
-        testWorkflowRule.getTestEnvironment().registerDelayedCallback(
-            java.time.Duration.ofMillis(500),
+        testEnv.registerDelayedCallback(
+            Duration.ofMillis(500),
             () -> assertEquals(TransferStatus.PENDING, workflow.getStatus())
         );
 
-        testWorkflowRule.getTestEnvironment().registerDelayedCallback(
-            java.time.Duration.ofSeconds(1),
+        testEnv.registerDelayedCallback(
+            Duration.ofSeconds(1),
             () -> workflow.approve(true)
         );
 
