@@ -31,7 +31,7 @@ application {
     mainClass = 'com.temporal.training.WorkerMain'
 }
 
-task execute(type: JavaExec) {
+tasks.register('execute', JavaExec) {
     mainClass = findProperty("mainClass") ?: ""
     classpath = sourceSets.main.runtimeClasspath
     if (project.hasProperty("args")) {
