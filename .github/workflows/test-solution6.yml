@@ -19,10 +19,12 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
     
+    # No gradle-version here on purpose: the wrapper in
+    # gradle/wrapper/gradle-wrapper.properties is the single source of truth,
+    # so a version bump is one file, not two. The action still handles
+    # dependency caching and wrapper-jar validation.
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v6
-      with:
-        gradle-version: '9.7.1'
     
     - name: Run Solution 6 Tests
-      run: gradle test --tests "com.temporal.training.solution6.MoneyTransferWorkflowTest"
+      run: ./gradlew test --tests "com.temporal.training.solution6.MoneyTransferWorkflowTest"
