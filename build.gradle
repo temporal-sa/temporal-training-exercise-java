@@ -14,28 +14,31 @@ repositories {
 }
 
 dependencies {
-    implementation 'io.temporal:temporal-sdk:1.31.0'
-    implementation 'ch.qos.logback:logback-classic:1.4.11'
+    implementation 'io.temporal:temporal-sdk:1.38.0'
+    implementation 'ch.qos.logback:logback-classic:1.6.3'
     
-    testImplementation 'io.temporal:temporal-testing:1.20.1'
-    testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
-    testImplementation 'org.mockito:mockito-core:5.5.0'
+    testImplementation 'io.temporal:temporal-testing:1.38.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.mockito:mockito-core:5.23.0'
 }
 
 test {
     useJUnitPlatform()
-    useJUnit()
 }
 
 application {
     mainClass = 'com.temporal.training.WorkerMain'
 }
 
-task execute(type: JavaExec) {
-    mainClass = findProperty("mainClass") ?: ""
+tasks.register('execute', JavaExec) {
+    // providers.gradleProperty gives a Provider<String>; project.property returns
+    // Object, which makes .split(" ") resolve to Groovy's DefaultGroovyMethods
+    // split(Closure) instead of String.split(String).
+    mainClass = providers.gradleProperty('mainClass').orElse('')
     classpath = sourceSets.main.runtimeClasspath
-    if (project.hasProperty("args")) {
-        args project.property("args").split(" ")
+    def execArgs = providers.gradleProperty('args')
+    if (execArgs.present) {
+        args execArgs.get().split(' ')
     }
 }

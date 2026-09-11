@@ -1,14 +1,16 @@
 package com.temporal.training.exercise6;
 
 import io.temporal.api.enums.v1.IndexedValueType;
-import io.temporal.client.WorkflowOptions;
-import io.temporal.testing.TestWorkflowRule;
-import org.junit.After;
-import org.junit.Rule;
-import org.junit.Test;
+import io.temporal.testing.TestWorkflowEnvironment;
+import io.temporal.testing.TestWorkflowExtension;
+import io.temporal.worker.Worker;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.mockito.Mockito;
 
-import static org.junit.Assert.assertEquals;
+import java.time.Duration;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -17,37 +19,30 @@ import static org.mockito.Mockito.withSettings;
 
 public class MoneyTransferWorkflowTest {
 
-    @Rule
-    public TestWorkflowRule testWorkflowRule = TestWorkflowRule.newBuilder()
-            .setWorkflowTypes(MoneyTransferWorkflowImpl.class)
-            .setDoNotStart(true)
-            .build();
-
-    private void registerSearchAttribute() {
-        // TODO: Register the "AccountId" search attribute with TEXT type
-        // Hint: Use testWorkflowRule.getTestEnvironment().registerSearchAttribute()
-    }
-
-    @After
-    public void tearDown() {
-        testWorkflowRule.getTestEnvironment().shutdown();
-    }
+    @RegisterExtension
+    public static final TestWorkflowExtension testWorkflowExtension =
+            TestWorkflowExtension.newBuilder()
+                    .registerWorkflowImplementationTypes(MoneyTransferWorkflowImpl.class)
+                    // TODO: Register the "AccountId" search attribute with TEXT type
+                    // Hint: .registerSearchAttribute("AccountId", IndexedValueType.INDEXED_VALUE_TYPE_TEXT)
+                    .setDoNotStart(true)
+                    .build();
 
     @Test
-    public void testSuccessfulTransfer() {
+    public void testSuccessfulTransfer(
+            TestWorkflowEnvironment testEnv, Worker worker, MoneyTransferWorkflow workflow) {
         // TODO: Create a mock BankingActivities using Mockito
         // Hint: Use Mockito.mock() with withSettings().withoutAnnotations()
         BankingActivities mockActivities = null;
-        
-        // TODO: Register search attribute, activities, and start test environment
-        
-        // TODO: Create workflow stub using testWorkflowRule
-        MoneyTransferWorkflow workflow = null;
-        
+
+        // TODO: Register the mock activities on the injected Worker, then start the
+        // test environment. The extension was built with setDoNotStart(true), so
+        // nothing is running until you call testEnv.start().
+
         TransferRequest request = new TransferRequest("account-123", "account-456", 100.0, "transfer-1");
 
         // TODO: Register delayed callback to approve the transfer after 1 second
-        // Hint: Use testWorkflowRule.getTestEnvironment().registerDelayedCallback()
+        // Hint: Use testEnv.registerDelayedCallback()
 
         // TODO: Execute the workflow and verify results
         String result = null;
@@ -61,7 +56,8 @@ public class MoneyTransferWorkflowTest {
     }
 
     @Test
-    public void testRejectedTransfer() {
+    public void testRejectedTransfer(
+            TestWorkflowEnvironment testEnv, Worker worker, MoneyTransferWorkflow workflow) {
         // TODO: Implement test for rejected transfer scenario
         // Similar to testSuccessfulTransfer but:
         // - Send approval(false) instead of approval(true)
@@ -71,7 +67,8 @@ public class MoneyTransferWorkflowTest {
     }
 
     @Test
-    public void testQueryStatus() {
+    public void testQueryStatus(
+            TestWorkflowEnvironment testEnv, Worker worker, MoneyTransferWorkflow workflow) {
         // TODO: Implement test for query functionality
         // - Register callback to check status is PENDING after 500ms
         // - Register callback to approve after 1 second

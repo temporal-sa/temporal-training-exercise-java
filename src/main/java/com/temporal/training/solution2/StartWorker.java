@@ -4,10 +4,11 @@ import io.temporal.client.WorkflowClient;
 import io.temporal.serviceclient.WorkflowServiceStubs;
 import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerFactory;
+import io.temporal.worker.WorkerOptions;
 
 public class StartWorker {
     
-    public static final String TASK_QUEUE = "MoneyTransferTaskQueue";
+    public static final String TASK_QUEUE = "money-transfer-signals-task-queue";
     
     public static void main(String[] args) {
         WorkflowServiceStubs service = WorkflowServiceStubs.newLocalServiceStubs();

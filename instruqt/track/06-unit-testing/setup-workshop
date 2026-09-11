@@ -1,0 +1,10 @@
+#!/bin/bash
+# ABOUTME: Per-challenge setup. Clears Workers left running by a prior chapter.
+# This challenge needs no Worker and no dev server: TestWorkflowRule brings its
+# own in-process server up and tears it down again.
+set -euo pipefail
+
+pkill -f "com.temporal.training.*StartWorker"   2>/dev/null || true
+pkill -f "com.temporal.training.*StartWorkflow" 2>/dev/null || true
+
+echo "Exercise 6 ready."

@@ -1,0 +1,17 @@
+#!/bin/bash
+# ABOUTME: Per-challenge setup. Runs when the attendee enters this challenge.
+#
+# No staging here. All 15 packages are one Gradle module rooted at
+# /root/workshop, staged once by the sandbox preset's setup script. Per-challenge
+# setup only clears Workers left running by a prior chapter.
+#
+# This matters more in Java than it looks. Every exercise registers a different
+# MoneyTransferWorkflowImpl, so a stale Worker that is still polling picks up
+# tasks it cannot replay and the Workflow fails on a non-determinism error that
+# points at code the attendee never touched.
+set -euo pipefail
+
+pkill -f "com.temporal.training.*StartWorker"   2>/dev/null || true
+pkill -f "com.temporal.training.*StartWorkflow" 2>/dev/null || true
+
+echo "Exercise 1 ready."

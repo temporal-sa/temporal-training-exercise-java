@@ -1,0 +1,43 @@
+#!/bin/bash
+# ABOUTME: Check script. Fill-in-the-blanks style.
+# Gate 1: TODOs gone from the test file.
+# Gate 2: the test bodies actually assert something.
+# Gate 3: the suite passes.
+#
+# Gate 2 exists because the three @Test methods ship with EMPTY bodies. JUnit
+# passes an empty test, so deleting the TODO comments alone would clear gate 1
+# and gate 3 without a single line of test code being written.
+export GRADLE_USER_HOME=/root/.gradle
+fail() { echo "FAIL: $1"; exit 1; }
+pass() { echo "PASS: $1"; }
+
+cd /root/workshop || fail "Workshop directory is missing."
+T=src/test/java/com/temporal/training/exercise6/MoneyTransferWorkflowTest.java
+
+if grep -q "TODO" "$T" 2>/dev/null; then
+    fail "MoneyTransferWorkflowTest.java still has TODO comments. Implement them, then check again."
+fi
+pass "All TODOs implemented"
+
+count() { grep -c "$1" "$T" 2>/dev/null || true; }
+
+if [ "$(count 'Mockito.mock(')" -lt 3 ]; then
+    fail "Fewer than three Mockito.mock() calls. Each of the three tests needs its own mocked BankingActivities."
+fi
+if [ "$(count 'registerDelayedCallback(')" -lt 3 ]; then
+    fail "Fewer than three registerDelayedCallback() calls. That is how the approval Signal is delivered under time skipping."
+fi
+if [ "$(count 'assertEquals(')" -lt 6 ]; then
+    fail "Fewer than six assertEquals() calls. An empty @Test method passes, so the assertions are the whole exercise."
+fi
+if [ "$(count 'verify(')" -lt 4 ]; then
+    fail "Fewer than four verify() calls. Verify which Activities ran and which did not."
+fi
+pass "Test bodies assert and verify"
+
+if ! OUT=$(./gradlew --console=plain test --rerun \
+        --tests "com.temporal.training.exercise6.MoneyTransferWorkflowTest" 2>&1); then
+    echo "$OUT" | tail -30
+    fail "The exercise 6 tests did not pass. Fix the failures above, then check again."
+fi
+pass "Test suite passes"

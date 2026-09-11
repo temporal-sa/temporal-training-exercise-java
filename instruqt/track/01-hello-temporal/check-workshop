@@ -1,0 +1,38 @@
+#!/bin/bash
+# ABOUTME: Check script. Fill-in-the-blanks style.
+# Gate 1: every TODO in the exercise files is gone.
+# Gate 2: the module still compiles.
+# Gate 3: a Workflow completed on hello-task-queue.
+export GRADLE_USER_HOME=/root/.gradle
+fail() { echo "FAIL: $1"; exit 1; }
+pass() { echo "PASS: $1"; }
+
+EX=/root/workshop/src/main/java/com/temporal/training/exercise1
+
+for f in GreetingActivityImpl.java GreetingWorkflowImpl.java StartWorker.java; do
+    if grep -q "TODO" "$EX/$f" 2>/dev/null; then
+        fail "$f still has TODO comments. Implement them, then check again."
+    fi
+done
+pass "All TODOs implemented"
+
+# One Gradle module builds all 15 packages, so a compile error anywhere blocks
+# every other exercise as well. Say so plainly rather than letting the Temporal
+# gate below fail with a confusing "no completed Workflow".
+cd /root/workshop || fail "Workshop directory is missing."
+if ! OUT=$(./gradlew --console=plain -q classes 2>&1); then
+    echo "$OUT" | tail -20
+    fail "The project does not compile. Fix the errors above, then check again."
+fi
+pass "Project compiles"
+
+COMPLETED=$(temporal workflow list \
+    --address 127.0.0.1:7233 \
+    --namespace default \
+    --query 'TaskQueue="hello-task-queue" AND ExecutionStatus="Completed"' \
+    --limit 1 2>/dev/null | grep -c "Completed" || true)
+
+if [ "$COMPLETED" -lt 1 ]; then
+    fail "No completed Workflow on hello-task-queue. Start the Worker, run StartWorkflow, and wait for the greeting to print."
+fi
+pass "Workflow completed on hello-task-queue"

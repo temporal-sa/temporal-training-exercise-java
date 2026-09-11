@@ -34,3 +34,11 @@ logs/
 *.swp
 *.swo
 *~
+
+# Stray Gradle-home artifacts, created when GRADLE_USER_HOME points at the repo
+# root instead of ~/.gradle. Never commit these.
+caches/
+daemon/
+jdks/
+native/
+wrapper/

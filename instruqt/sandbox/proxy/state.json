@@ -1,0 +1,8 @@
+{
+  "kill_all": false,
+  "services": {
+    "maven": true,
+    "github": true,
+    "httpbin": true
+  }
+}
