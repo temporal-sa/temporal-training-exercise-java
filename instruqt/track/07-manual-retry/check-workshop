@@ -1,0 +1,55 @@
+#!/bin/bash
+# ABOUTME: Check script. Fill-in-the-blanks style.
+# Gate 1: TODOs gone from the two files the attendee edits.
+# Gate 2: the non-retryable failure and the retry wiring are both present.
+# Gate 3: a transfer on money-transfer-task-queue completed AFTER going
+#         through the manual retry path: its history has a failed Activity
+#         and a retry Signal. A transfer between two valid accounts
+#         completes too, but proves nothing about this exercise.
+fail() { echo "FAIL: $1"; exit 1; }
+pass() { echo "PASS: $1"; }
+
+EX=/root/workshop/src/main/java/com/temporal/training/exercise7
+
+for f in BankingActivitiesImpl.java MoneyTransferWorkflowImpl.java; do
+    if grep -q "TODO" "$EX/$f" 2>/dev/null; then
+        fail "$f still has TODO comments. Implement them, then check again."
+    fi
+done
+pass "All TODOs implemented"
+
+if ! grep -q "newNonRetryableFailure" "$EX/BankingActivitiesImpl.java" 2>/dev/null; then
+    fail "BankingActivitiesImpl.java never throws ApplicationFailure.newNonRetryableFailure. Automatic retry will keep hammering the bad account."
+fi
+pass "Non-retryable failure thrown on invalid accounts"
+
+if [ "$(grep -c "executeWithRetry(" "$EX/MoneyTransferWorkflowImpl.java")" -lt 3 ]; then
+    fail "MoneyTransferWorkflowImpl.java should call executeWithRetry for both withdraw and deposit."
+fi
+if ! grep -q "retryRequested *= *true" "$EX/MoneyTransferWorkflowImpl.java" 2>/dev/null; then
+    fail "The retry Signal handler never sets retryRequested = true, so executeWithRetry never wakes up."
+fi
+pass "withdraw and deposit run through executeWithRetry"
+
+IDS=$(temporal workflow list \
+    --address 127.0.0.1:7233 \
+    --namespace default \
+    --query 'TaskQueue="money-transfer-task-queue" AND ExecutionStatus="Completed"' \
+    --limit 10 -o json 2>/dev/null | jq -r '.[].execution.workflowId')
+
+if [ -z "$IDS" ]; then
+    fail "No completed Workflow on money-transfer-task-queue. Start a transfer, approve it, then send the retry Signal with a corrected toAccount."
+fi
+pass "Transfer completed"
+
+for id in $IDS; do
+    if temporal workflow show --address 127.0.0.1:7233 --workflow-id "$id" -o json 2>/dev/null \
+        | jq -e '
+            any(.events[]; .eventType == "EVENT_TYPE_ACTIVITY_TASK_FAILED")
+            and any(.events[]; .workflowExecutionSignaledEventAttributes.signalName == "retry")
+          ' >/dev/null; then
+        pass "$id failed an Activity, took a retry Signal, and completed"
+        exit 0
+    fi
+done
+fail "A transfer completed, but none went through the manual retry path. Its history needs a failed Activity followed by a retry Signal."

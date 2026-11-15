@@ -1,0 +1,24 @@
+#!/bin/bash
+# ABOUTME: Solve script. Copies the finished test in so the check passes.
+# The solution test declares package solution6, so sed rewrites the package
+# as it copies. The Workflow under test is already complete in exercise6, but
+# it is restored from solution6 too in case it was left broken by the
+# "Prove the Tests Bite" step.
+set -uo pipefail
+cd /root/workshop || exit 0
+
+N=6
+SRC=src/main/java/com/temporal/training
+TEST=src/test/java/com/temporal/training
+
+for f in "$SRC/solution$N"/*.java; do
+    sed "s/com\.temporal\.training\.solution$N/com.temporal.training.exercise$N/g" \
+        "$f" > "$SRC/exercise$N/$(basename "$f")"
+done
+sed "s/com\.temporal\.training\.solution$N/com.temporal.training.exercise$N/g" \
+    "$TEST/solution$N/MoneyTransferWorkflowTest.java" \
+    > "$TEST/exercise$N/MoneyTransferWorkflowTest.java"
+
+timeout 300 ./gradlew -q test \
+    --tests "com.temporal.training.exercise$N.MoneyTransferWorkflowTest" --rerun || true
+exit 0

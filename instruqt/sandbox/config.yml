@@ -1,0 +1,23 @@
+name: Temporal in Practice Sandbox - Java
+slug: temporal-in-practice-sandbox-java
+description: |-
+  Java 17 workshop sandbox for the Temporal in Practice track.
+
+  scripts/setup-workshop installs the toolchain (git, OpenJDK 17, the
+  Temporal CLI, mitmproxy), clones the exercise repo, pre-warms the Gradle
+  cache and daemon, and starts the Temporal dev server with the AccountId
+  search attribute registered.
+
+  Pushed and published independently of the track:
+    instruqt sandbox push
+    instruqt sandbox publish --message="..."
+containers:
+- name: workshop
+  image: ubuntu:24.04
+  shell: /bin/bash
+  memory: 4096
+  # Every port a challenge tab points at. Instruqt's proxy returns HTTP 572
+  # (target host connection failed) for ports that are not listed here.
+  ports:
+  - 5000   # Network Control Panel
+  - 8233   # Temporal Web UI

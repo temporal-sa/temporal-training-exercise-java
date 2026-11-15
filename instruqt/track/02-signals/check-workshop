@@ -1,0 +1,49 @@
+#!/bin/bash
+# ABOUTME: Check script. Fill-in-the-blanks style.
+# Gate 1: TODOs gone from the five files the attendee edits.
+#         BankingActivities.java keeps a stale TODO in its Javadoc and is
+#         already complete, so it is not gated.
+# Gate 2: the Signal method is annotated and the Workflow waits on it.
+# Gate 3: a money transfer Workflow completed, and its history shows the
+#         approve Signal arriving.
+fail() { echo "FAIL: $1"; exit 1; }
+pass() { echo "PASS: $1"; }
+
+EX=/root/workshop/src/main/java/com/temporal/training/exercise2
+
+for f in BankingActivitiesImpl.java MoneyTransferWorkflow.java MoneyTransferWorkflowImpl.java StartWorker.java StartWorkflow.java; do
+    if grep -q "TODO" "$EX/$f" 2>/dev/null; then
+        fail "$f still has TODO comments. Implement them, then check again."
+    fi
+done
+pass "All TODOs implemented"
+
+if ! grep -q "@SignalMethod" "$EX/MoneyTransferWorkflow.java" 2>/dev/null; then
+    fail "MoneyTransferWorkflow.java has no @SignalMethod. approve() needs one to be callable as a Signal."
+fi
+pass "@SignalMethod present"
+
+if ! grep -q "Workflow.await" "$EX/MoneyTransferWorkflowImpl.java" 2>/dev/null; then
+    fail "MoneyTransferWorkflowImpl.java never calls Workflow.await(). The transfer has to wait for the approval."
+fi
+pass "Workflow waits for approval"
+
+IDS=$(temporal workflow list \
+    --address 127.0.0.1:7233 \
+    --namespace default \
+    --query 'TaskQueue="MoneyTransferTaskQueue" AND WorkflowType="MoneyTransferWorkflow" AND ExecutionStatus="Completed"' \
+    --limit 10 -o json 2>/dev/null | jq -r '.[].execution.workflowId')
+
+if [ -z "$IDS" ]; then
+    fail "No completed money transfer Workflow. Start the Worker, run StartWorkflow, and wait for the result to print."
+fi
+pass "Money transfer Workflow completed"
+
+for id in $IDS; do
+    if temporal workflow show --address 127.0.0.1:7233 --workflow-id "$id" -o json 2>/dev/null \
+        | jq -e 'any(.events[]; .workflowExecutionSignaledEventAttributes.signalName == "approve")' >/dev/null; then
+        pass "approve Signal recorded in the history of $id"
+        exit 0
+    fi
+done
+fail "No completed transfer received an approve Signal. StartWorkflow should call workflow.approve(true) while the Workflow is waiting."

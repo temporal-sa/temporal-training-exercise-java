@@ -1,0 +1,75 @@
+#!/bin/bash
+# ABOUTME: Solve script. Copies the finished code in, then walks a transfer
+# through the whole manual retry path from the CLI, exactly as the
+# assignment does: start, approve, wait for RETRYING, Signal the fix.
+#
+# The exercise7 starter targets invalid-account-456 and returns as soon as
+# the Workflow has started, so every step after the start is a CLI call.
+set -uo pipefail
+cd /root/workshop || exit 0
+
+N=7
+TASK_QUEUE=money-transfer-task-queue
+SRC=src/main/java/com/temporal/training
+
+for f in "$SRC/solution$N"/*.java; do
+    sed "s/com\.temporal\.training\.solution$N/com.temporal.training.exercise$N/g" \
+        "$f" > "$SRC/exercise$N/$(basename "$f")"
+done
+
+pkill -f "StartWorker" 2>/dev/null || true
+sleep 1
+
+# Compile once, up front, so the Worker and starter builds below do not race
+# each other through compileJava. See 01-hello-temporal/solve-workshop.
+./gradlew -q compileJava
+
+SINCE=$(date -u +%Y-%m-%dT%H:%M:%S)
+nohup ./gradlew -q execute -PmainClass=com.temporal.training.exercise$N.StartWorker \
+    > /tmp/solve-0$N-worker.log 2>&1 &
+
+# Only pollers seen after SINCE count: a killed Worker lingers in the list.
+for _ in $(seq 1 180); do
+    POLLERS=$(temporal task-queue describe --task-queue "$TASK_QUEUE" -o json 2>/dev/null \
+        | jq -r --arg since "$SINCE" '[.pollers // [] | .[] | select(.lastAccessTime > $since)] | length')
+    [ "${POLLERS:-0}" -gt 0 ] && break
+    sleep 1
+done
+
+# Earlier attempts may have left Workflows parked in RETRYING. Terminate them
+# so the lookup below finds the one this script starts.
+for id in $(temporal workflow list \
+        --query "TaskQueue=\"$TASK_QUEUE\" AND ExecutionStatus=\"Running\"" \
+        -o json 2>/dev/null | jq -r '.[].execution.workflowId'); do
+    temporal workflow terminate --workflow-id "$id" --reason "solve-workshop" >/dev/null 2>&1 || true
+done
+
+timeout 120 ./gradlew -q execute -PmainClass=com.temporal.training.exercise$N.StartWorkflow
+
+WORKFLOW_ID=""
+for _ in $(seq 1 30); do
+    WORKFLOW_ID=$(temporal workflow list \
+        --query "TaskQueue=\"$TASK_QUEUE\" AND ExecutionStatus=\"Running\"" \
+        --limit 1 -o json 2>/dev/null | jq -r '.[0].execution.workflowId // empty')
+    [ -n "$WORKFLOW_ID" ] && break
+    sleep 1
+done
+echo "Workflow: ${WORKFLOW_ID:-not found}"
+
+temporal workflow signal --workflow-id "$WORKFLOW_ID" --name approve --input true
+
+for _ in $(seq 1 30); do
+    STATUS=$(temporal workflow query --workflow-id "$WORKFLOW_ID" --name getStatus -o json 2>/dev/null \
+        | jq -r '.queryResult[0] // empty')
+    [ "$STATUS" = "RETRYING" ] && break
+    sleep 1
+done
+echo "Status before the fix: ${STATUS:-unknown}"
+
+temporal workflow signal --workflow-id "$WORKFLOW_ID" --name retry \
+    --input '{"key":"toAccount","value":"account-456"}'
+
+timeout 60 temporal workflow result --workflow-id "$WORKFLOW_ID"
+
+pkill -f "StartWorker" 2>/dev/null || true
+exit 0

@@ -1,0 +1,40 @@
+#!/bin/bash
+# ABOUTME: Check script. Fill-in-the-blanks style.
+# Gate 1: every TODO in the files the attendee edits is gone.
+# Gate 2: a Workflow completed on hello-task-queue.
+# Gate 3: it returned an actual greeting. The stub Activity returns null, and
+#         a Workflow that returns null still completes, so gate 2 alone would
+#         pass on an unimplemented Activity.
+fail() { echo "FAIL: $1"; exit 1; }
+pass() { echo "PASS: $1"; }
+
+EX=/root/workshop/src/main/java/com/temporal/training/exercise1
+
+for f in GreetingActivityImpl.java GreetingWorkflowImpl.java StartWorker.java; do
+    if grep -q "TODO" "$EX/$f" 2>/dev/null; then
+        fail "$f still has TODO comments. Implement them, then check again."
+    fi
+done
+pass "All TODOs implemented"
+
+WORKFLOW_ID=$(temporal workflow list \
+    --address 127.0.0.1:7233 \
+    --namespace default \
+    --query 'TaskQueue="hello-task-queue" AND ExecutionStatus="Completed"' \
+    --limit 1 -o json 2>/dev/null | jq -r '.[0].execution.workflowId // empty')
+
+if [ -z "$WORKFLOW_ID" ]; then
+    fail "No completed Workflow on hello-task-queue. Start the Worker, run StartWorkflow, and wait for the greeting to print."
+fi
+pass "Workflow completed on hello-task-queue"
+
+RESULT=$(temporal workflow show \
+    --address 127.0.0.1:7233 \
+    --workflow-id "$WORKFLOW_ID" -o json 2>/dev/null \
+    | jq -r '.events[-1].workflowExecutionCompletedEventAttributes.result.payloads[0].data // empty' \
+    | base64 -d 2>/dev/null)
+
+if ! echo "$RESULT" | grep -q "Temporal"; then
+    fail "The Workflow completed but returned ${RESULT:-nothing}. GreetingActivityImpl should return \"Hello, \" + name + \"!\"."
+fi
+pass "Workflow returned $RESULT"

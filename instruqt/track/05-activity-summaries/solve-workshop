@@ -1,0 +1,46 @@
+#!/bin/bash
+# ABOUTME: Solve script. Mimics a learner solving the challenge.
+# Runs on Skip and on `instruqt track test`. It must leave the check passing:
+# copy the finished code into the exercise package, then drive a Workflow to
+# completion on the task queue the check queries.
+#
+# The solution files declare package solution5, so a plain cp would not
+# compile. sed rewrites the package as it copies.
+set -uo pipefail
+cd /root/workshop || exit 0
+
+N=5
+TASK_QUEUE=MoneyTransferTaskQueue
+SRC=src/main/java/com/temporal/training
+
+for f in "$SRC/solution$N"/*.java; do
+    sed "s/com\.temporal\.training\.solution$N/com.temporal.training.exercise$N/g" \
+        "$f" > "$SRC/exercise$N/$(basename "$f")"
+done
+
+pkill -f "StartWorker" 2>/dev/null || true
+sleep 1
+
+# Compile once, up front. The Worker and the starter are two concurrent
+# Gradle builds; if both reach compileJava with stale classes, one deletes
+# class files the other is reading and fails with NoSuchFileException.
+./gradlew -q compileJava
+
+SINCE=$(date -u +%Y-%m-%dT%H:%M:%S)
+nohup ./gradlew -q execute -PmainClass=com.temporal.training.exercise$N.StartWorker \
+    > /tmp/solve-0$N-worker.log 2>&1 &
+
+# Wait for THIS Worker to poll rather than sleeping a fixed time. The server
+# keeps listing a killed Worker's poller for minutes, and exercises 2 to 5
+# share a task queue, so only pollers seen after SINCE count.
+for _ in $(seq 1 180); do
+    POLLERS=$(temporal task-queue describe --task-queue "$TASK_QUEUE" -o json 2>/dev/null \
+        | jq -r --arg since "$SINCE" '[.pollers // [] | .[] | select(.lastAccessTime > $since)] | length')
+    [ "${POLLERS:-0}" -gt 0 ] && break
+    sleep 1
+done
+
+timeout 120 ./gradlew -q execute -PmainClass=com.temporal.training.exercise$N.StartWorkflow
+
+pkill -f "StartWorker" 2>/dev/null || true
+exit 0

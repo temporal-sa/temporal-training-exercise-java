@@ -1,0 +1,247 @@
+#!/bin/bash
+# ABOUTME: Sandbox preset setup script. Provisions the whole workshop sandbox.
+#
+# This is the preset's lifecycle script, named for the container in
+# ../config.yml. It ships with `instruqt sandbox push` + `instruqt sandbox
+# publish`, NOT with `instruqt track push`.
+#
+# Because it arrives with the preset rather than inside a git clone, it can
+# install its own dependencies, git included. The base image is relied on for
+# nothing beyond a Debian userland.
+#
+# Steps:
+#   1. System packages: git, OpenJDK 17
+#   2. Clone the exercise repo
+#   3. Temporal CLI
+#   4. uv, then mitmproxy, Flask and the mitmproxy CA cert
+#   5. Pre-warm Gradle: wrapper distribution, every dependency, compiled classes
+#   6. The network control panel
+#   7. Environment for every shell, Gradle's proxy settings included
+#   8. Start the proxy, the control panel and the Temporal dev server
+#
+# The order of 4 and 5 is load-bearing. See the comment on step 4.
+# See ../README.md for how to ship a change to this file.
+set -euo pipefail
+
+# Pin these to a tag or a commit before a live workshop so every attendee gets
+# the same code regardless of what landed on main that morning.
+WORKSHOP_REPO="${WORKSHOP_REPO:-https://github.com/taonic/temporal-training-exercise-java.git}"
+# TEMPORARY: points at the instruqt-track branch until it merges. Set back to
+# main, then `instruqt sandbox push` + `publish`, once instruqt/ is on main.
+WORKSHOP_REF="${WORKSHOP_REF:-instruqt-track}"
+WORKSHOP_DIR="${WORKSHOP_DIR:-/root/workshop}"
+# build.gradle pins its toolchain to 17 and declares no toolchain resolver,
+# so Gradle can only use a JDK that is already installed. Keep these in step.
+JDK_PACKAGE="openjdk-17-jdk-headless"
+PROXY_PYTHON_VERSION="3.12"
+
+log() { echo "==> $*"; }
+
+# 0. Wait for Instruqt host bootstrap.
+until [ -f /opt/instruqt/bootstrap/host-bootstrap-completed ]; do
+    sleep 1
+done
+
+# 1. System packages. The complete list, git and the JDK included: nothing
+#    here is inherited from the base image, so add a new binary dependency to
+#    this list and nowhere else.
+#
+#    ca-certificates-java comes in with the JDK. It matters in step 4:
+#    update-ca-certificates then also writes the mitmproxy CA into the JVM
+#    trust store at /etc/ssl/certs/java/cacerts.
+log "Installing system packages"
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get install -y -qq --no-install-recommends \
+    ca-certificates \
+    curl \
+    git \
+    jq \
+    unzip \
+    less \
+    vim-tiny \
+    nano \
+    bash-completion \
+    procps \
+    "${JDK_PACKAGE}"
+
+JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")"
+export JAVA_HOME
+log "JAVA_HOME is ${JAVA_HOME}"
+
+# 2. Clone the exercise repo. Only the exercise and solution code needs
+#    fetching now; this script is already here.
+#    Skipped when the directory exists, which is how a local test run points
+#    the sandbox at an uncommitted working tree.
+if [ ! -d "${WORKSHOP_DIR}" ]; then
+    log "Cloning ${WORKSHOP_REPO} at ${WORKSHOP_REF}"
+    git clone --depth 1 --branch "${WORKSHOP_REF}" "${WORKSHOP_REPO}" "${WORKSHOP_DIR}"
+else
+    log "${WORKSHOP_DIR} already exists, skipping the clone"
+fi
+
+# 3. Temporal CLI, on the default PATH because the check and solve scripts
+#    run non-interactively and never source a profile.
+log "Installing the Temporal CLI"
+curl -sSf https://temporal.download/cli.sh | sh
+ln -sf /root/.temporalio/bin/temporal /usr/local/bin/temporal
+
+# 4. uv, then mitmproxy and Flask in their own venv. The JDK is the only
+#    language runtime the workshop itself needs; uv supplies a private
+#    interpreter for the proxy so no system Python is involved.
+log "Installing uv"
+curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+
+log "Installing mitmproxy and the control panel dependencies"
+uv venv --python "${PROXY_PYTHON_VERSION}" /opt/proxy-venv
+VIRTUAL_ENV=/opt/proxy-venv uv pip install --quiet mitmproxy flask
+ln -sf /opt/proxy-venv/bin/mitmdump /usr/local/bin/mitmdump
+
+# Generate the CA cert by starting mitmdump briefly, then trust it
+# system-wide. update-ca-certificates runs the ca-certificates-java hook, so
+# the JVM trust store picks it up too and Gradle's HTTPS through the proxy
+# validates.
+#
+# This must finish before step 5. A JVM reads its trust store once, at
+# startup, and the Gradle daemon that step 5 leaves running goes on to serve
+# the attendee's builds. Start it before the CA is trusted and every
+# download through the proxy fails with "PKIX path building failed".
+log "Generating and trusting the mitmproxy CA cert"
+mitmdump --listen-port 8889 --set block_global=false > /tmp/mitm-init.log 2>&1 &
+MITM_INIT_PID=$!
+for _ in $(seq 1 30); do
+    [ -f /root/.mitmproxy/mitmproxy-ca-cert.pem ] && break
+    sleep 1
+done
+kill "${MITM_INIT_PID}" 2>/dev/null || true
+wait "${MITM_INIT_PID}" 2>/dev/null || true
+
+MITM_CA=/root/.mitmproxy/mitmproxy-ca-cert.pem
+cp "${MITM_CA}" /usr/local/share/ca-certificates/mitmproxy-ca.crt
+update-ca-certificates
+
+# 5. Pre-warm Gradle. The first `./gradlew` downloads the wrapper
+#    distribution (~200 MB) and every dependency jar from Maven Central, and
+#    compiles all fourteen exercise and solution packages. That is a minute
+#    or more an attendee should not spend staring at a progress bar, and it
+#    happens here, straight to the internet, before Gradle is pointed at the
+#    proxy in step 7.
+#
+#    compileJava and compileTestJava resolve only the compile classpaths. The
+#    `execute` task and the test task need runtime-only jars on top, so the
+#    init script resolves every resolvable configuration. Without it the
+#    first Worker start goes back to Maven Central.
+#
+#    The daemon this leaves running is reused by the attendee's first build,
+#    so no Gradle setting that changes daemon arguments (org.gradle.jvmargs)
+#    may be added after this point. Proxy system properties do not count.
+log "Pre-warming Gradle"
+cd "${WORKSHOP_DIR}"
+chmod +x ./gradlew
+cat > /tmp/resolve-all.gradle << 'GRADLE'
+allprojects {
+    tasks.register('resolveAllConfigurations') {
+        doLast {
+            configurations.findAll { it.canBeResolved }.each { it.resolve() }
+        }
+    }
+}
+GRADLE
+./gradlew --quiet --init-script /tmp/resolve-all.gradle \
+    resolveAllConfigurations compileJava compileTestJava
+
+# 6. Network control panel. These files come from the clone, so WORKSHOP_REF
+#    has to name a ref that contains instruqt/sandbox/proxy/. The addon and
+#    the panel both read and write /root/proxy/state.json, so they get a
+#    writable copy of their own.
+PROXY_SRC="${WORKSHOP_DIR}/instruqt/sandbox/proxy"
+if [ ! -d "${PROXY_SRC}" ]; then
+    echo "ERROR: ${PROXY_SRC} is missing." >&2
+    echo "       WORKSHOP_REF=${WORKSHOP_REF} does not contain instruqt/sandbox/proxy/." >&2
+    exit 1
+fi
+
+log "Staging the network control panel"
+mkdir -p /root/proxy/static
+cp -r "${PROXY_SRC}/." /root/proxy/
+
+# 7. Environment for every shell.
+#    /etc/profile.d covers login shells and the /etc/bash.bashrc line covers
+#    interactive non-login shells, which is what Instruqt's terminal tabs
+#    open. Putting them only in /etc/bash.bashrc does not work: Ubuntu's
+#    /root/.bashrc returns early for non-interactive shells.
+#
+#    The JVM ignores HTTP_PROXY and friends. Gradle reads its proxy from
+#    system properties instead, set in ~/.gradle/gradle.properties below. The
+#    Worker and test JVMs that Gradle forks inherit neither, so the Temporal
+#    SDK's gRPC to 127.0.0.1:7233 never goes near the proxy.
+log "Writing shell environment"
+cat > /etc/profile.d/workshop.sh << EOF
+export JAVA_HOME="${JAVA_HOME}"
+export TEMPORAL_ADDRESS="127.0.0.1:7233"
+export HTTP_PROXY="http://127.0.0.1:8888"
+export HTTPS_PROXY="http://127.0.0.1:8888"
+export http_proxy="http://127.0.0.1:8888"
+export https_proxy="http://127.0.0.1:8888"
+export NO_PROXY="127.0.0.1,localhost"
+export no_proxy="127.0.0.1,localhost"
+export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+export NODE_EXTRA_CA_CERTS=${MITM_CA}
+EOF
+chmod 0644 /etc/profile.d/workshop.sh
+
+if ! grep -q 'profile.d/workshop.sh' /etc/bash.bashrc 2>/dev/null; then
+    cat >> /etc/bash.bashrc << EOF
+
+# Workshop environment
+[ -f /etc/profile.d/workshop.sh ] && . /etc/profile.d/workshop.sh
+[ -f /usr/share/bash-completion/bash_completion ] && . /usr/share/bash-completion/bash_completion
+cd ${WORKSHOP_DIR} 2>/dev/null || true
+EOF
+fi
+
+mkdir -p /root/.gradle
+if ! grep -q 'proxyHost' /root/.gradle/gradle.properties 2>/dev/null; then
+    cat >> /root/.gradle/gradle.properties << 'EOF'
+# Route Gradle's own downloads through the workshop proxy so the Network
+# Control Panel toggles apply to it. Written after the pre-warm on purpose.
+systemProp.http.proxyHost=127.0.0.1
+systemProp.http.proxyPort=8888
+systemProp.https.proxyHost=127.0.0.1
+systemProp.https.proxyPort=8888
+systemProp.http.nonProxyHosts=localhost|127.0.0.1
+EOF
+fi
+
+# 8. Start background services.
+log "Starting the proxy and the control panel"
+nohup mitmdump \
+    --listen-port 8888 \
+    --set block_global=false \
+    --set ssl_insecure=false \
+    -s /root/proxy/toggle_addon.py \
+    > /tmp/proxy.log 2>&1 &
+
+nohup /opt/proxy-venv/bin/python /root/proxy/controlpanel.py \
+    > /tmp/controlpanel.log 2>&1 &
+
+# AccountId is registered up front because exercise 4 upserts it as a search
+# attribute. A dev server started without it fails that Workflow Task.
+log "Starting the Temporal dev server"
+nohup temporal server start-dev \
+    --ip 0.0.0.0 \
+    --db-filename /root/temporal.db \
+    --search-attribute AccountId=Text \
+    --log-level warn \
+    > /tmp/temporal-server.log 2>&1 &
+
+for _ in $(seq 1 60); do
+    if temporal operator cluster health --address 127.0.0.1:7233 >/dev/null 2>&1; then
+        log "Temporal server healthy"
+        break
+    fi
+    sleep 1
+done
+
+log "Sandbox provisioning complete."

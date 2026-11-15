@@ -1,0 +1,58 @@
+#!/bin/bash
+# ABOUTME: Check script. Fill-in-the-blanks style.
+# Gate 1: TODOs gone from the test file.
+# Gate 2: the tests actually assert something. The file as shipped compiles
+#         and all three tests pass with empty bodies, so "the suite passes"
+#         proves nothing on its own.
+# Gate 3: the suite runs three tests with no failures, read from the JUnit
+#         XML report rather than from Gradle's exit code alone.
+fail() { echo "FAIL: $1"; exit 1; }
+pass() { echo "PASS: $1"; }
+
+cd /root/workshop || fail "Workshop directory is missing."
+
+TEST_CLASS=com.temporal.training.exercise6.MoneyTransferWorkflowTest
+TEST_FILE=src/test/java/com/temporal/training/exercise6/MoneyTransferWorkflowTest.java
+REPORT=build/test-results/test/TEST-$TEST_CLASS.xml
+
+if grep -q "TODO" "$TEST_FILE" 2>/dev/null; then
+    fail "MoneyTransferWorkflowTest.java still has TODO comments. Implement them, then check again."
+fi
+pass "All TODOs implemented"
+
+if ! grep -q '"AccountId"' "$TEST_FILE"; then
+    fail "registerSearchAttribute() never registers AccountId. The Workflow upserts it, so the test server needs it."
+fi
+CALLBACKS=$(grep -c "registerDelayedCallback" "$TEST_FILE")
+VERIFIES=$(grep -c "verify(" "$TEST_FILE")
+ASSERTS=$(grep -c "assertEquals" "$TEST_FILE")
+if [ "$CALLBACKS" -lt 3 ]; then
+    fail "Found $CALLBACKS registerDelayedCallback calls. Each test needs one to approve or reject, and testQueryStatus needs a second to Query."
+fi
+if [ "$VERIFIES" -lt 4 ]; then
+    fail "Found $VERIFIES verify() calls. Verify which Activities ran in both testSuccessfulTransfer and testRejectedTransfer."
+fi
+if [ "$ASSERTS" -lt 4 ]; then
+    fail "Found $ASSERTS assertEquals calls. Assert the result and the final status in each scenario."
+fi
+pass "Tests register AccountId, schedule Signals, assert results and verify Activities"
+
+rm -f "$REPORT"
+if ! OUT=$(timeout 300 ./gradlew test --tests "$TEST_CLASS" --rerun 2>&1); then
+    echo "$OUT" | tail -25
+    fail "The exercise 6 tests did not pass. Fix the failures above, then check again."
+fi
+
+if [ ! -f "$REPORT" ]; then
+    fail "Gradle reported success but wrote no test report for $TEST_CLASS."
+fi
+SUITE=$(grep -o '<testsuite [^>]*' "$REPORT")
+TESTS=$(echo "$SUITE" | grep -o 'tests="[0-9]*"' | grep -o '[0-9]*')
+FAILURES=$(echo "$SUITE" | grep -o 'failures="[0-9]*"' | grep -o '[0-9]*')
+ERRORS=$(echo "$SUITE" | grep -o 'errors="[0-9]*"' | grep -o '[0-9]*')
+SKIPPED=$(echo "$SUITE" | grep -o 'skipped="[0-9]*"' | grep -o '[0-9]*')
+
+if [ "${TESTS:-0}" -lt 3 ] || [ "${FAILURES:-1}" -ne 0 ] || [ "${ERRORS:-1}" -ne 0 ] || [ "${SKIPPED:-1}" -ne 0 ]; then
+    fail "Expected 3 passing tests, got tests=$TESTS failures=$FAILURES errors=$ERRORS skipped=$SKIPPED."
+fi
+pass "All $TESTS tests pass"

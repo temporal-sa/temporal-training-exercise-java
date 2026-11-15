@@ -1,0 +1,9 @@
+{
+  "kill_all": false,
+  "services": {
+    "maven": true,
+    "gradle": true,
+    "github": true,
+    "httpbin": true
+  }
+}
